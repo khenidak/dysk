@@ -19,13 +19,35 @@
 #include "dysk_bdd.h"
 #include "az.h"
 
+// ---------------------------------
+// Dysk Enpoint
+// ---------------------------------
+#define EP_DEVICE_NAME "dysk_ep" // We use a dummy char dev, we are only intersted in IOCTL
+
+#define IOCTLMOUNTDYSK   9901
+#define IOCTLUNMOUNTDYSK 9902
+#define IOCTGETDYSK 		 9903
+#define IOCTLISTDYYSKS 	 9904
+
+
+static int ep_open(struct inode *, struct file *);
+static int ep_release(struct inode *, struct file *);
+static ssize_t ep_read(struct file *, char __user *, size_t, loff_t *);
+static ssize_t ep_write(struct file *, const char __user *, size_t, loff_t *);
+static long ep_ioctl (struct file *filp, unsigned int cmd, unsigned long arg);
+struct file_operations ep_ops = {
+	.owner   = THIS_MODULE,
+	.read    = ep_read,
+	.write   = ep_write,
+	.open    = ep_open,
+	.release = ep_release,
+	.unlocked_ioctl = ep_ioctl
+  };
+
 // -----------------------------------
 // Typical dysk instance operations
 // -----------------------------------
 #define DYSK_BD_NAME "dyskroot"
-static int count_devices = 0;
-static int dysk_major    = 0;
-
 static int dysk_open(struct block_device *bd, fmode_t mode);
 static void dysk_release(struct gendisk *gd, fmode_t mode);
 static int dysk_revalidate(struct gendisk *gd);
@@ -56,14 +78,27 @@ struct dyskslist{
 	spinlock_t lock;
 	dysk *head;
 };
-// Forward..
+
+// --------------------------
+// Global State
+// --------------------------
+static int endpoint_major = 0;
+static int count_devices 	= 0;
+static int dysk_major    	= -1;
+
+// mknod
+struct class *class;
+struct device *device;
+// List of current dysks
+static dyskslist *dysks;
+// worker instance used by all dysks
 dysk_worker *default_worker;
+
+// Forward
 int io_hook(dysk *d);
 int io_unhook(dysk *d);
 
-// List of current dysks
-static dyskslist *dysks;
-
+// Endpoint contants
 #define MAX_IN_OUT 2048
 #define LINE_LENGTH 32
 
@@ -160,6 +195,7 @@ static inline int dysk_del(char* name, char* error)
 
 return 0;
 }
+// Adds a dysk
 static inline int dysk_add(dysk *d, char* error)
 {
 	const char *ERR_DYSK_EXISTS = "Failed to mount dysk, device with name:%s already exists";
@@ -204,7 +240,7 @@ static inline int dysk_add(dysk *d, char* error)
 
 	return 0;
 }
-
+// Dysk def to buffer for Endpoint IOCTL
 void dysk_def_to_buffer(dysk_def *dd, char *buffer)
 {
 	//type-devicename-sectorcount-accountname-accountKey-path-host-ip-lease-major-minor
@@ -223,6 +259,7 @@ void dysk_def_to_buffer(dysk_def *dd, char *buffer)
 									dd->minor,
 									dd->is_vhd);
 }
+// Dysk def from buffer -- Endpoint IOCTL
 int dysk_def_from_buffer(char *buffer, size_t len, dysk_def *dd, char *error)
 {
 	const char *ERR_RW 					 = "Can't determine read/write flag";
@@ -351,11 +388,10 @@ int dysk_def_from_buffer(char *buffer, size_t len, dysk_def *dd, char *error)
 	}
 	idx += cut + strlen(n);
 
-
 	return 0;
 }
 
-
+// IOCTL Mount
 long dysk_mount(struct file *f, char *user_buffer)
 {
 	char *buffer = NULL;
@@ -468,7 +504,7 @@ done:
 	}
 	return ret;
 }
-
+//IOCTL unmount
 long dysk_unmount(struct file *f, char *user_buffer)
 {
 	char *buffer = NULL;
@@ -535,7 +571,7 @@ done:
 	if(out) kfree(out);
 	return ret;
 }
-
+// IOCTL get
 long dysk_get(struct file *f, char *user_buffer)
 {
 	// Errors
@@ -622,7 +658,7 @@ done:
 	if(out) kfree(out);
 	return ret;
 }
-
+//IOCTL list
 long dysk_list(struct file *f, char *user_buffer)
 {
 	const char* format = "%s\n";
@@ -673,36 +709,10 @@ done:
 	if(out) kfree(out);
 	return ret;
 }
-
-// ---------------------------------
-// Dysk Enpoint
-// ---------------------------------
-#define EP_DEVICE_NAME "dysk_ep" // We use a dummy char dev, we are only intersted in IOCTL
-
-#define IOCTLMOUNTDYSK   9901
-#define IOCTLUNMOUNTDYSK 9902
-#define IOCTGETDYSK 		 9903
-#define IOCTLISTDYYSKS 	 9904
-
-
-int endpoint_major = 0;
-struct class *class;
-struct device *device;
-
-static int ep_open(struct inode *, struct file *);
-static int ep_release(struct inode *, struct file *);
-static ssize_t ep_read(struct file *, char __user *, size_t, loff_t *);
-static ssize_t ep_write(struct file *, const char __user *, size_t, loff_t *);
-static long ep_ioctl (struct file *filp, unsigned int cmd, unsigned long arg);
-struct file_operations ep_ops = {
-	.owner   = THIS_MODULE,
-	.read    = ep_read,
-	.write   = ep_write,
-	.open    = ep_open,
-	.release = ep_release,
-	.unlocked_ioctl = ep_ioctl
-  };
-
+// -------------------------------------
+// Endpoint char device routines
+// -------------------------------------
+/* Endpoint char device does not do read/write only IOCTL */
 static int ep_open(struct inode *n, struct file *f)
 {
 	return 0;
@@ -720,13 +730,10 @@ static ssize_t ep_write(struct file *f, const char __user *buffer, size_t size, 
 	return 0;
 }
 
-
-
 long ep_ioctl (struct file *f, unsigned int cmd, unsigned long args)
 {
-
-	/* TODO SANITY CHECK */
-	switch(cmd){
+	switch(cmd)
+	{
 		case IOCTLMOUNTDYSK:
 			return dysk_mount(f, (char *)args);
 		case IOCTLUNMOUNTDYSK:
@@ -738,18 +745,18 @@ long ep_ioctl (struct file *f, unsigned int cmd, unsigned long args)
 		default:
 			return -ENOTTY;
 	}
-
 }
-
+// ------------------------------
+// Endpoint Lifecycle
+// ------------------------------
 int endpoint_stop(void)
 {
-	/* TODO: CHECK DEVICE OPEN */
+	/* TODO: CHECK DEVICE OPEN - need to?*/
 	if(device) device_destroy(class, MKDEV(endpoint_major, 0));
 	if(class) class_destroy(class);
 	unregister_chrdev(endpoint_major, EP_DEVICE_NAME);
 	return 0;
 }
-
 
 int endpoint_start(void)
 {
@@ -776,31 +783,29 @@ int endpoint_start(void)
 	printk(KERN_INFO "bdd - endpoint device registerd with %d major", endpoint_major);
 	return 0;
 }
-
-
 // -------------------------------------------
 // Dysk: Request Mgmt
 // ------------------------------------------
 // Moves a request from kernel queue to dysk
 static void io_request(struct request_queue *q)
 {
-	int success					= 0;
 	struct request *req = NULL;
 	dysk *d 						= NULL;
-
 	d = (dysk *) q->queuedata;
 
 	while (NULL != (req = blk_peek_request(q)))
 	{
-		blk_start_request (req);
-
+		// If dysk in catastrophe or being deleted
 		if(DYSK_OK != d->status)
 		{
+			blk_start_request (req);
 		 io_end_request(d,req, -EINVAL);
 		 continue;
 		}
+		// Only xfer reqs
 		if(req->cmd_type != REQ_TYPE_FS)
 		{
+			blk_start_request (req);
 			io_end_request(d,req, -EINVAL);
 			continue;
 		}
@@ -808,32 +813,34 @@ static void io_request(struct request_queue *q)
 		if(WRITE == rq_data_dir(req) && 1 == d->def->readOnly)
 		{
 			printk(KERN_ERR "dysk %s is readonly, a write request was received", d->def->deviceName);
+			blk_start_request (req);
 			io_end_request(d, req, -EROFS);
 			continue;
 		}
 
-		// execute
-		az_do_request(d, req);
-		/*
-		if(0 != (success = az_do_request(d, req)))
-			io_end_request(d,req, success);
-			*/
+		// if queue accepted the request..
+		if(0 == az_do_request(d,req))
+				blk_start_request (req);
 	}
 }
-
+// Set dysk in catastrophe mode, and delete it
+// any process that attempts to write to this disk
+// will get EIO then disk will disappear
 void dysk_catastrophe(dysk *d)
 {
 	char dummy[256] = {0};
-	printk(KERN_INFO "dysk:%s is entring catastrophe mode", d->def->deviceName);
+	int success;
 	d->status = DYSK_CATASTROPHE;
-
+	printk(KERN_ERR "dysk:%s is entered catastrophe mode", d->def->deviceName);
 	// Keep trying to delete until either deleted by us or somebody else
-	while(-ENOMEM != dysk_del(d->def->deviceName, (char *) &dummy ));
-	;
-
-	printk(KERN_INFO "Catastrophe dysk Deleted!");
-
+	while(1)
+	{
+		success = dysk_del(d->def->deviceName, (char *) &dummy );
+		if(-1 == success || 0 == success) break;
+	}
+	printk(KERN_ERR "Catastrophe dysk deleted!");
 }
+
 // All our requests are atomic (all or none)
 void io_end_request(dysk *d, struct request *req, int err)
 {
@@ -858,17 +865,14 @@ int dysk_getgeo(struct block_device *dev, struct hd_geometry *geo)
 
 	return 0;
 }
-
 static int dysk_open(struct block_device *bd, fmode_t mode)
 {
   return 0;
 }
-
 static void dysk_release(struct gendisk * gd, fmode_t mode)
 {
 	// no-op
 }
-
 static int dysk_revalidate(struct gendisk *gd)
 {
   return 0;
@@ -876,11 +880,12 @@ static int dysk_revalidate(struct gendisk *gd)
 
 static int dysk_ioctl (struct block_device *bd, fmode_t mode, unsigned int cmd, unsigned long arg)
 {
-
 	printk(KERN_INFO "DYSK IO-CTL is GEO:%d CMD:%d", cmd == HDIO_GETGEO, cmd );
   return -EINVAL;
 }
-
+// ----------------------------
+// BLDEV integration
+// ----------------------------
 // Hooks a dysk to linux io
 int io_hook(dysk *d)
 {
@@ -948,8 +953,6 @@ int io_unhook(dysk *d)
   put_disk(gd);
   printk(KERN_INFO "detach: %s put_disk done", d->def->deviceName);
 
-// 	if(rq) kfree(rq);
-//	if(gd) kfree(gd);
   return 0;
 }
 
@@ -972,7 +975,7 @@ static void unload(void)
 	// free the default worker
 	kfree(default_worker);
 	// deregister our major
-	unregister_blkdev(dysk_major, DYSK_BD_NAME);
+	if(-1 != dysk_major) unregister_blkdev(dysk_major, DYSK_BD_NAME);
 	// tear down az
 	az_teardown();
 	//tear down dysks
@@ -987,10 +990,7 @@ static void unload(void)
 static int __init _init_module(void)
 {
 	int success = 0;
-/* TODO: Change to fail label */
-	// -----------------------------
-	// Dysks init
-	// -----------------------------
+	// Dysks list
 	dysks = kmalloc(sizeof(dyskslist), GFP_KERNEL);
 	if(!dysks)  return -ENOMEM;
 	memset(dysks, 0, sizeof(dyskslist));
@@ -1002,21 +1002,25 @@ static int __init _init_module(void)
 		return -ENOMEM;
 	}
 	memset(dysks->head, 0, sizeof(dysk));
-
  	INIT_LIST_HEAD(&dysks->head->list);
 	spin_lock_init(&dysks->lock);
 
+	// Azure transfer library
 	// Az module Init
 	if(-1 == az_init())
+	{
+		unload();
 		return -1;
-
-
+	}
+	// major for dysk blkdev
 	// Register dysk major
 	if(0 >= (dysk_major = register_blkdev(0, DYSK_BD_NAME)))
 	{
 		printk(KERN_INFO "Dysk - failed to registerd block device, module is in failed state");
+		unload();
 		return -1;
 	}
+	// endpoint
 	if(0 != endpoint_start())
 	{
 		unload();
@@ -1030,16 +1034,16 @@ static int __init _init_module(void)
 		unload();
 		return -ENOMEM;
 	}
-	// Although the head does not do anywork, we need it
-	// during delete dysk routing check dysk_del(..)
-	dysks->head->worker = default_worker;
-
 	if(0 != (success = dysk_worker_init(default_worker)))
 	{
 		printk(KERN_INFO "Dysk - failed tp init the worker, module is in failed state");
 		unload();
 		return success;
 	}
+
+	// Although the head does not do anywork, we need it
+	// during delete dysk routing check dysk_del(..)
+	dysks->head->worker = default_worker;
 
   printk(KERN_INFO "Dysk init routine completed successfully");
   return 0;

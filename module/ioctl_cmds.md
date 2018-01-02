@@ -30,7 +30,7 @@ Disk Path \n	# Max 1024 include the extention if any sample: /xxx/xxx/xx.xx
 Host\n 		# Max 512 Full host name sample: dysk.core.blob.windows.core
 IP\n		# max 32 ip host name.
 Lease-Id\n	# max 64
-0 or 1 \n # is vhd
+0 or 1 \n 	# is vhd
 ```
 
 

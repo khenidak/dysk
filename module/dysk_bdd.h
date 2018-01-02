@@ -25,7 +25,6 @@
 #define DYSK_DELETING 	 1 // Deleting based on user request
 #define DYSK_CATASTROPHE 2 // Something is wrong with connection, lease etc.
 
-
 // Instance of a mounted disk
 typedef struct dysk dysk;
 
@@ -43,8 +42,6 @@ void io_end_request(dysk *d, struct request *req, int err);
 
 // sets dysk in catastrophe mode
 void dysk_catastrophe(dysk *d);
-
-
 
 struct dysk_def
 {
@@ -150,15 +147,13 @@ struct dysk_worker
 	// w_task (linked list head)
 	w_task *head;
 	// Keep working, signal used to stop
-	int keep_working;
+	int working;
 	// Number of tasks in queue
 	atomic_t count_tasks;
 	// Number of throtlled (waiting) tasks in queue
 	int count_throttled_tasks;
 	// Lock used for add/delete tasks to the queue
 	spinlock_t lock;
-	// signal used by dysk to signal the worker that there is more work
-	struct completion more_work;
 	// Worker thread
 	struct task_struct *worker_thread;
 	// don't sleep - Set if retryable tasks are found in queue

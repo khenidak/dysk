@@ -37,9 +37,9 @@
 #define AZ_RESPONSE_CONFLICT			429 // Conflict (shouldn't really happen: unless reqing during transnient states)
 #define AZ_RESPONSE_BAD_RANGE			416 // Bad range (disk resized?)
 
-#define az_is_catastrophe(azstatuscode) (azstatuscode == AZ_RESPONSE_ERR_ACCESS || azstatuscode == AZ_RESPONSE_ERR_LEASE || azstatuscode == AZ_RESPONSE_ERR_NOT_FOUND || azstatuscode == AZ_RESPONSE_BAD_RANGE) ? 1 : 0
-#define az_is_throttle(azstatuscode) (azstatuscode == AZ_RESPONSE_ERR_THROTTLE || azstatuscode == AZ_RESPONSE_ERR_TIME_OUT || azstatuscode == AZ_RESPONSE_CONFLICT) ? 1 : 0
-#define az_is_done(azstatuscode) (azstatuscode == AZ_RESPONSE_OK || azstatuscode == AZ_RESPONSE_CREATED) ? 1 : 0
+#define az_is_catastrophe(azstatuscode) ((azstatuscode == AZ_RESPONSE_ERR_ACCESS || azstatuscode == AZ_RESPONSE_ERR_LEASE || azstatuscode == AZ_RESPONSE_ERR_NOT_FOUND || azstatuscode == AZ_RESPONSE_BAD_RANGE) ? 1 : 0)
+#define az_is_throttle(azstatuscode) ((azstatuscode == AZ_RESPONSE_ERR_THROTTLE || azstatuscode == AZ_RESPONSE_ERR_TIME_OUT || azstatuscode == AZ_RESPONSE_CONFLICT) ? 1 : 0)
+#define az_is_done(azstatuscode) ((azstatuscode == AZ_RESPONSE_OK || azstatuscode == AZ_RESPONSE_CREATED) ? 1 : 0)
 
 
 // Http request header processing
@@ -211,6 +211,7 @@ static inline void connection_teardown(connection *c)
 		c->sockt->ops->release(c->sockt);
 		if (c->sockt) sock_release(c->sockt);
 	}
+	kfree(c);
 }
 // Creates a connection
 static inline int connection_create(connection_pool *pool, connection **c)
@@ -219,7 +220,6 @@ static inline int connection_create(connection_pool *pool, connection **c)
 	connection *newcon  	 = NULL;
 	int success 					 = -ENOMEM;
 	int connection_attempt = 1;
-
 
 	newcon = kmalloc(sizeof(connection), GFP_KERNEL);
 	if(!newcon) goto failed;
@@ -231,7 +231,6 @@ static inline int connection_create(connection_pool *pool, connection **c)
  		if(0 != (success =  sockt->ops->connect(sockt, (struct sockaddr *)pool->server, sizeof(struct sockaddr_in), 0)))
 		{
 			if(-ENOMEM == success) goto failed; // if no memory try later
-
 			// Anything else is subject to max try connection
 			if(MAX_TRY_CONNECT == connection_attempt)
 			{
@@ -246,20 +245,11 @@ static inline int connection_create(connection_pool *pool, connection **c)
 		}
 		break; // connected
   }
-
 	newcon->sockt = sockt;
 	*c 						= newcon;
 	return success;
 failed:
-	if(newcon)
-	{
-		if(newcon->sockt)
-		{
-			 newcon->sockt->ops->release(newcon->sockt);
-			if (newcon->sockt) sock_release(newcon->sockt);
-			kfree(newcon);
-		}
-	}
+	connection_teardown(newcon);
 	return success;
 }
 
@@ -293,8 +283,6 @@ void connection_pool_put(connection_pool *pool, connection **c, put_connection_r
 int connection_pool_get(connection_pool *pool, connection **c)
 {
 	int success 	= -ENOMEM;
-	//printk(KERN_INFO "GET: CONNECTION POOL Q:%d: O:%d", connection_pool_count(pool), pool->count);
-
 	if(0 <  connection_pool_count(pool)) // we have connection in pool
 	{
 		kfifo_out(&pool->connection_queue, c, sizeof(connection*));
@@ -340,7 +328,6 @@ static inline int connection_pool_init(connection_pool *pool)
 	return success;
 fail:
 	if(server) kfree(server);
-	//if(pool->connection_queue) kfifo_free(pool->connection_queue);
 	return success;
 }
 
@@ -365,31 +352,24 @@ static inline void connection_pool_teardown(connection_pool *pool)
 // ---------------------------
 static inline int http_response_completed(http_response *res, char *buffer)
 {
-/*
-	printk(KERN_INFO "complete: Status Code:%d(%s), ContentLength:%d BytesR:%lu check:%d",
-								 		res->status_code,
+				/*
+	printk(KERN_INFO "Bytes:%lu StatusCode:%d(%s) Check:%d" ,
+										res->bytes_received,
+										res->status_code,
 										res->status,
-										res->content_length,
-			 							res->bytes_received,
-										res->content_length !=0 ? res->content_length == (res->bytes_received - (res->body - buffer)) : -1);
+										res->content_length == (res->bytes_received - (res->body - buffer)));
 */
+
 /*
-//	if(AZ_RESPONSE_CREATED == res->status_code) return 1; // put request completed. We really don't care about anything else
+ for any status other than 201 we will get Content-Length
+ */
+	const char *chunked_body_mark = "0\r\n\r\n";
 
-	// at least 256 bytes + content length + status code +  status line
-	if(128 < res->bytes_received && -1 != res->content_length && 0 != res->status_code && NULL != res->status)
-	{
-		if(0 == res->content_length || res->content_length == (res->bytes_received - (res->body - buffer)));
+	if(0 == res->status_code || NULL == res->status || NULL == res->body) return 0;
+// Put Reqs
+	if(AZ_RESPONSE_CREATED == res->status_code && NULL != res->body && 0 == strncmp(res->body, chunked_body_mark,strlen(chunked_body_mark)))
 			return 1;
-	}
-*/
-	if(
-			-1 == res->content_length ||
-			0 == res->status_code ||
-			NULL == res->status ||
-			NULL == res->body
-		) return 0;
-
+// Get Req
 	if(res->content_length == (res->bytes_received - (res->body - buffer) )) return 1;
 	return 0;
 }
@@ -425,56 +405,36 @@ static inline int process_response(char* response, size_t response_length, http_
 		res->idx += cut + strlen(rn);
 	}
 
-	if(AZ_RESPONSE_CREATED ==  res->status_code) return 1; // Put request, nothing else is needed
-
-
-	if(0 != res->status_code && -1 == res->content_length)
+	// find content length if response code is not created.
+	if(0 != res->status_code && AZ_RESPONSE_CREATED != res->status_code && -1 == res->content_length)
 	{
 		//headers, we are only intersted in Content-Length
 		while(res->idx < response_length)
 		{
 			memset(&buffer, 0, 512);
 			cut = get_until (response + res->idx,  rn, (char *) &buffer, 510);
-/*
-			if(-1 == cut)
-			{
-				printk(KERN_INFO "BROKEN HEADER?: %s", response);
-				return 0;
-			}
-*/
 			// Content Length
 			if(NULL != strstr(buffer, content_length))
 				sscanf(buffer, "%*s %d", &res->content_length);
 
 			res->idx += cut + strlen(rn);
-
-			//printk(KERN_INFO "HEADER: %s", buffer);
-
 			if(-1 != res->content_length) break;// found it
 		}
 	}
 
-	// Its kinna ugly but we need to handle incomplete headers
-	if(-1 != res->content_length && NULL == res->body)
+	// Its kinna ugly but we need to handle incomplete response
+	if( 0 != res->status_code && (-1 != res->content_length || AZ_RESPONSE_CREATED == res->status_code)  && NULL == res->body)
 	{
 		while(res->idx < response_length)
 		{
 			memset(&buffer, 0, 512);
 			cut = get_until (response + res->idx,  rn, (char *) &buffer, 510);
-			/*
-			if(-1 == cut)
-			{
-				printk("NOBODY YET");
-				return 0; // nobody found
-			}
-			*/
 			if(0 == cut)
 			{
 				res->idx += strlen(rn);
 				res->body = response + res->idx;
 				break;
 			}
-			 //printk(KERN_INFO "BODY: %s", buffer);
 			res->idx += cut + strlen(rn);
 		}
 	}
@@ -492,7 +452,6 @@ int make_header(__reqstate *reqstate, char * header_buffer, size_t header_buffer
 	char *date 						= NULL;
 	char *signstring 			= NULL;
 	char *authToken       = NULL;
-	//char *decodedKey      = NULL;
 	char *encodedToken    = NULL;
 	dysk *d               = NULL;
 	size_t len     				= 0;
@@ -555,7 +514,7 @@ int make_header(__reqstate *reqstate, char * header_buffer, size_t header_buffer
 	if(0 != success) goto done; // in the unlikely event
 
 	// hashmac sets null byte in the middle?
-	encodedToken = base64_encode(authToken, 32 /*strlen(authToken)*/, &len);
+	encodedToken = base64_encode(authToken, 32 /*strlen(authToken)*/, &len); /* hmac function *sometimes places* a null in the middle of the string */
 	if(!encodedToken) goto done;
 
 
@@ -587,8 +546,6 @@ int make_header(__reqstate *reqstate, char * header_buffer, size_t header_buffer
 													 d->def->accountName,
 													 encodedToken);
 	}
-	//printk(KERN_INFO "HEADER FOR %s:%s", (READ == dir ? "GET" : "PUT"), header_buffer);
-
 	res = 0;
 done:
 	if(!date) kfree(date);
@@ -598,11 +555,9 @@ done:
 	return res;
 }
 
-
 // ---------------------------------
 // WORKER FUNCS
 // ---------------------------------
-
 // Post receive cleanup
 void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reason)
 {
@@ -666,7 +621,6 @@ task_result __receive_az_response(w_task *this_task)
 
 	mm_segment_t oldfs;
 
-
 	// Extract state
 	resstate = (__resstate *) this_task->state;
 	pool 		 = resstate->azstate->pool;
@@ -679,8 +633,7 @@ task_result __receive_az_response(w_task *this_task)
 	// Ranges
 	range_start 	= ((u64) blk_rq_pos(req) << 9);
 	range_end 		= range_start + blk_rq_bytes(req) -1;
-  response_size = blk_rq_bytes(req) + RESPONSE_HEADER_LENGTH;
-
+  response_size = (READ == rq_data_dir(req)) ?  blk_rq_bytes(req) + RESPONSE_HEADER_LENGTH : RESPONSE_HEADER_LENGTH;
 
 	// allocate response buffer
 	if(!resstate->response_buffer)
@@ -761,16 +714,14 @@ task_result __receive_az_response(w_task *this_task)
 
 			if(1 == process_response(resstate->response_buffer, strlen(resstate->response_buffer), resstate->httpresponse, success))
 				break;
-			printk(KERN_INFO "This request is not complete yet");
 		}
 	}
 
 	if(1 == http_response_completed(resstate->httpresponse, resstate->response_buffer))
 	{
-		printk(KERN_INFO  "HTTP:%d", resstate->httpresponse->status_code);
-		if(az_is_catastrophe(resstate->httpresponse->status_code)) return catastrophe;
-		if(az_is_throttle(resstate->httpresponse->status_code)) goto retry_throttle;
-		if(!az_is_done(resstate->httpresponse->status_code))
+		if(1 == az_is_catastrophe(resstate->httpresponse->status_code)) return catastrophe;
+		if(1 == az_is_throttle(resstate->httpresponse->status_code)) goto retry_throttle;
+		if(1 != az_is_done(resstate->httpresponse->status_code))
 		{
 			printk(KERN_ERR "** Dysk az module got an expected status code %d and will go into catastrophe mode for [%s]", resstate->httpresponse->status_code, this_task->d->def->deviceName);
 			return catastrophe;
@@ -782,6 +733,7 @@ task_result __receive_az_response(w_task *this_task)
 		dir = rq_data_dir(req);
 		if(READ == dir)
 		{
+			printk(KERN_INFO "DOWNLOAD:%s", resstate->httpresponse->body);
 			// Response iterator
 			struct req_iterator iter;
 			struct bio_vec bvec;
@@ -799,9 +751,11 @@ task_result __receive_az_response(w_task *this_task)
 				mark += len;
 			}
 		}
+		return done;
 	}
+ printk(KERN_ERR "** Dysk az module got unexpected response and will fail :%s", resstate->response_buffer);
+/* we shouldn't be here */
 
-	return done;
 retry_throttle:
 	res = throttle_dysk;
 
@@ -982,7 +936,7 @@ task_result __send_az_req(w_task *this_task)
 
 	if(WRITE == dir)
 	{
-		if(! reqstate->body_buffer)
+		if(!reqstate->body_buffer)
 		{
 			struct req_iterator iter;
 			struct bio_vec bvec;
@@ -1003,6 +957,7 @@ task_result __send_az_req(w_task *this_task)
 				kunmap_atomic(target_buffer);
 				mark += len;
 			}
+			printk(KERN_INFO "UPLOAD:%s", reqstate->body_buffer);
 		}
 
 		if(!reqstate->body_msg)
@@ -1028,8 +983,6 @@ task_result __send_az_req(w_task *this_task)
   		reqstate->body_iov->iov_len  = blk_rq_bytes(req);
   		iov_iter_init(&reqstate->body_msg->msg_iter, WRITE, reqstate->body_iov, 1, blk_rq_bytes(req));
 		}
-
-
 		// Send
 		while(msg_data_left(reqstate->body_msg))
 		{
@@ -1089,15 +1042,11 @@ int az_do_request(dysk *d, struct request *req)
 	reqstate->req 		= req;
 	reqstate->azstate = (az_state *) d->xfer_state;
 
-	/* TODO: What happens if we failed to queue) */
-	queue_w_task(NULL, d, &__send_az_req, __clean_send_az_req, normal, reqstate);
-
-
+	success = queue_w_task(NULL, d, &__send_az_req, __clean_send_az_req, normal, reqstate);
 	if(0 != success)
 	{
 		if(reqstate) kfree(reqstate);
 	}
-
 	return success;
 }
 

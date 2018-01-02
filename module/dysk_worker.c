@@ -102,7 +102,6 @@ static inline void execute(dysk_worker *dw, w_task *w)
 	// if dysk is deleting or catastrophe dequeue
 	if(DYSK_OK != w->d->status)
 	{
-		printk(KERN_INFO "DYSK IS NOT OK");
 		if(DYSK_DELETING == d->status) clean_reason = clean_dysk_del;
 		if(DYSK_CATASTROPHE == d->status) clean_reason = clean_dysk_catastrohpe;
 		goto dequeue_task;
@@ -111,7 +110,6 @@ static inline void execute(dysk_worker *dw, w_task *w)
 	// if dysk was throttled, check if we still need to be
 	if(0 != w->d->throttle_until && time_after(jiffies, w->d->throttle_until))
 	{
-		printk(KERN_INFO "DYSK THROTTLING");
 		printk(KERN_INFO "dysk:%s throttling is completed", d->def->deviceName);
 		d->throttle_until = 0;
 	}
@@ -132,9 +130,8 @@ static inline void execute(dysk_worker *dw, w_task *w)
 			case retry_later: break;
 			case throttle_dysk:
 			{
-				printk(KERN_INFO "dysk:%s is entring throttling mode", d->def->deviceName);
 				if(0 == d->throttle_until) d->throttle_until= DYSK_THROTTLE_DEFAULT;
-
+				printk(KERN_INFO "dysk:%s is entring throttling mode", d->def->deviceName);
 				goto dequeue_task;
 			}
 			case catastrophe:
@@ -163,14 +160,12 @@ dequeue_task:
 	spin_lock(&dw->lock);
 	list_del(&w->list);
 	spin_unlock(&dw->lock);
-
 	// decrease counter
 	atomic_dec(&dw->count_tasks);
-
 	// clean
 	w->clean_fn(w, clean_reason);
 	// free
-	kfree(w); /*TODO: Free Linked List? */
+	kfree(w);
 }
 // big loop
 static int work_thread_fn(void *args)
@@ -180,42 +175,18 @@ static int work_thread_fn(void *args)
 	dw = (dysk_worker *) args;
 	printk(KERN_INFO "Dysk worker starting");
 
-	while(1 == dw->keep_working)
+	while(!kthread_should_stop())
 	{
 		w_task *t, *next;
-		int head_skipped = 0;
 		// loop and execute
 		list_for_each_entry_safe(t, next, &dw->head->list, list)
-		{
-			// this is the head task
-			if(NULL == t->exec_fn &&  0 == head_skipped)
-			{
-				printk(KERN_INFO "FOUND HEAD");
-				head_skipped = 1;
-				continue;
-			}
-			if(NULL == t->exec_fn)
-			{
-				printk(KERN_INFO "NO REQUESTS");
-				break;
-			}
 			execute(dw, t);
-		}
 
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(HZ /100);
+		schedule_timeout(HZ /1000); /*TODO: There has to be a better way than this */
 	}
-	dw->keep_working = 1;
-	do_exit(0);
+	dw->working = 0;
 	return 0;
-}
-// -----------------------------
-// Worker State
-// -----------------------------
-// Signal worker thread that there is more work to be done;
-void dysk_worker_work_available(dysk_worker *dw)
-{
-	complete(&dw->more_work);
 }
 // -----------------------------
 // init + tear down routines
@@ -231,7 +202,7 @@ int dysk_worker_init(dysk_worker *dw)
 	dw->head = w;
 
 	// stop signal
-	dw->keep_working = 1;
+	dw->working = 1;
 
 	// count of tasks
 	atomic_set(&dw->count_tasks, 0);
@@ -239,17 +210,13 @@ int dysk_worker_init(dysk_worker *dw)
 	// init queue
 	INIT_LIST_HEAD(&dw->head->list);
 
-	// more work signal /*TODO: DO WE NEED THIS? */
-	// signal for having more work
-	init_completion(&dw->more_work);
-
 	// init the lock
 	spin_lock_init(&dw->lock);
 
 	// Create worker thread
 	// We are using one worker per entire dysk, hence the static name
 	dw->worker_thread = kthread_run(work_thread_fn, dw, "dysk-worker-%d", 0);
-	if(!dw->worker_thread) goto fail;
+	if(IS_ERR(dw->worker_thread)) goto fail;
 
 	return 0;
 fail:
@@ -260,19 +227,17 @@ fail:
 void dysk_worker_teardown(dysk_worker *dw)
 {
 	if(!dw) return;
-
 	// assuming that stop func deallocates the memory allocated for worker_thread
-	if(!dw->worker_thread)
+	if(dw->worker_thread)
 	{
-		dw->keep_working = 0;
-		// Wait until worker stops
-		while(1 != dw->keep_working)
-						;
-		printk("Dysk worker stopped");
-		//kthread_stop(dw->worker_thread); // not needed since thread will exit
+		kthread_stop(dw->worker_thread);
+		while(1 == dw->working)
+		{
+			printk(KERN_INFO "Waiting for worker to stop..");
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(1 * HZ);
+		}
 	}
-
 	// if head object is there free it.
 	if(dw->head) kfree(dw->head);
-
 }
