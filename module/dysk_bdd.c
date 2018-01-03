@@ -798,14 +798,14 @@ static void io_request(struct request_queue *q)
 		// If dysk in catastrophe or being deleted
 		if(DYSK_OK != d->status)
 		{
-			blk_start_request (req);
+			blk_start_request(req);
 		 io_end_request(d,req, -EINVAL);
 		 continue;
 		}
 		// Only xfer reqs
 		if(req->cmd_type != REQ_TYPE_FS)
 		{
-			blk_start_request (req);
+			blk_start_request(req);
 			io_end_request(d,req, -EINVAL);
 			continue;
 		}
@@ -813,14 +813,14 @@ static void io_request(struct request_queue *q)
 		if(WRITE == rq_data_dir(req) && 1 == d->def->readOnly)
 		{
 			printk(KERN_ERR "dysk %s is readonly, a write request was received", d->def->deviceName);
-			blk_start_request (req);
+			blk_start_request(req);
 			io_end_request(d, req, -EROFS);
 			continue;
 		}
 
 		// if queue accepted the request..
 		if(0 == az_do_request(d,req))
-				blk_start_request (req);
+				blk_start_request(req);
 	}
 }
 // Set dysk in catastrophe mode, and delete it

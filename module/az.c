@@ -352,24 +352,17 @@ static inline void connection_pool_teardown(connection_pool *pool)
 // ---------------------------
 static inline int http_response_completed(http_response *res, char *buffer)
 {
-				/*
-	printk(KERN_INFO "Bytes:%lu StatusCode:%d(%s) Check:%d" ,
-										res->bytes_received,
-										res->status_code,
-										res->status,
-										res->content_length == (res->bytes_received - (res->body - buffer)));
-*/
-
-/*
- for any status other than 201 we will get Content-Length
- */
+	/* for any status other than 201 we will get Content-Length */
 	const char *chunked_body_mark = "0\r\n\r\n";
 
+	// fail any?
 	if(0 == res->status_code || NULL == res->status || NULL == res->body) return 0;
-// Put Reqs
-	if(AZ_RESPONSE_CREATED == res->status_code && NULL != res->body && 0 == strncmp(res->body, chunked_body_mark,strlen(chunked_body_mark)))
+
+	// Put Reqs (with or without content length)
+	if(-1 == res->content_length && AZ_RESPONSE_CREATED == res->status_code && NULL != res->body && 0 == strncmp(res->body, chunked_body_mark,strlen(chunked_body_mark)))
 			return 1;
-// Get Req
+
+	// Get Req + Put req with content length
 	if(res->content_length == (res->bytes_received - (res->body - buffer) )) return 1;
 	return 0;
 }
@@ -564,7 +557,6 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 	int free_all = 0;
 	__resstate *resstate  = (__resstate*) this_task->state;
 
-
 	if(resstate->c) connection_pool_put(resstate->azstate->pool,	&resstate->c, connection_ok);
 	resstate->c = NULL;
 
@@ -588,7 +580,6 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 		io_end_request(this_task->d, resstate->req, (clean_reason == clean_timeout) -EAGAIN ? : -EIO);
 		free_all = 1;
 	}
-
 
 	if(resstate->iov) kfree(resstate->iov);
 	if(resstate->msg) kfree(resstate->msg);
@@ -652,6 +643,7 @@ task_result __receive_az_response(w_task *this_task)
 		memset(resstate->httpresponse, 0, sizeof(http_response));
 		resstate->httpresponse->content_length = -1;
 	}
+
 	// Allocate request state in case we needed to retry
 	if(!resstate->reqstate)
 	{
@@ -664,7 +656,7 @@ task_result __receive_az_response(w_task *this_task)
 	if(!resstate->msg)
 	{
 		resstate->msg = kmalloc(sizeof(struct msghdr), GFP_KERNEL);
-		if(!resstate) return retry_later;
+		if(!resstate->msg) return retry_later;
 		memset(resstate->msg, 0, sizeof(struct msghdr));
 
 		resstate->msg->msg_name			 	= NULL; //pool->server;
@@ -678,8 +670,9 @@ task_result __receive_az_response(w_task *this_task)
 	if(!resstate->iov)
 	{
 		resstate->iov = kmalloc(sizeof(struct iovec), GFP_KERNEL);
-		if(!resstate) return retry_later;
+		if(!resstate->iov) return retry_later;
  		memset(resstate->iov, 0, sizeof(struct iovec));
+
 		resstate->iov->iov_base = (void *) resstate->response_buffer;
   	resstate->iov->iov_len = response_size;
 		iov_iter_init(&resstate->msg->msg_iter, READ, resstate->iov, 1, response_size);
@@ -694,8 +687,6 @@ task_result __receive_az_response(w_task *this_task)
 			success = sock_recvmsg(c->sockt, resstate->msg, MSG_DONTWAIT);
 			set_fs(oldfs);
 
-			//printk(KERN_INFO "RECEVE RESULT:%d", success);
-			// error check
 			if(0 >= success)
 			{
 				if(-EAGAIN == success || success == -EWOULDBLOCK)
@@ -733,7 +724,6 @@ task_result __receive_az_response(w_task *this_task)
 		dir = rq_data_dir(req);
 		if(READ == dir)
 		{
-			printk(KERN_INFO "DOWNLOAD:%s", resstate->httpresponse->body);
 			// Response iterator
 			struct req_iterator iter;
 			struct bio_vec bvec;
@@ -746,7 +736,7 @@ task_result __receive_az_response(w_task *this_task)
 			{
 				len =  bvec.bv_len;
 				target_buffer = kmap_atomic(bvec.bv_page);
-	 			memcpy(target_buffer, resstate->httpresponse->body + mark, len);
+	 			memcpy(target_buffer + bvec.bv_offset, resstate->httpresponse->body + mark, len);
 				kunmap_atomic(target_buffer);
 				mark += len;
 			}
@@ -804,7 +794,6 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 		io_end_request(this_task->d, reqstate->req, (clean_reason == clean_timeout) -EAGAIN ? : -EIO);
 		free_all = 1;
 	}
-
 
 	if(reqstate->header_buffer) kfree(reqstate->header_buffer); // header_buffer
 	if(reqstate->body_buffer) kfree(reqstate->body_buffer); 		// body buffer
@@ -933,7 +922,6 @@ task_result __send_az_req(w_task *this_task)
 		reqstate->header_sent = 1;
 	}
 
-
 	if(WRITE == dir)
 	{
 		if(!reqstate->body_buffer)
@@ -948,16 +936,19 @@ task_result __send_az_req(w_task *this_task)
 			if(!reqstate->body_buffer) return retry_now;
 			memset(reqstate->body_buffer, 0, blk_rq_bytes(req));
 
+			/* While i love to do scatter gather here but tracking
+			 * multiple messages with nonblock + reentrancy was a nightmare.
+			 * we fallback to 1 copy operation.
+			 */
 			//copy the entire buffer
 			rq_for_each_segment(bvec, req, iter)
 			{
 				len =  bvec.bv_len;
 				target_buffer = kmap_atomic(bvec.bv_page);
-	 			memcpy(reqstate->body_buffer + mark, target_buffer, len);
+	 			memcpy(reqstate->body_buffer + mark, target_buffer + bvec.bv_offset, len);
 				kunmap_atomic(target_buffer);
 				mark += len;
 			}
-			printk(KERN_INFO "UPLOAD:%s", reqstate->body_buffer);
 		}
 
 		if(!reqstate->body_msg)
@@ -983,6 +974,7 @@ task_result __send_az_req(w_task *this_task)
   		reqstate->body_iov->iov_len  = blk_rq_bytes(req);
   		iov_iter_init(&reqstate->body_msg->msg_iter, WRITE, reqstate->body_iov, 1, blk_rq_bytes(req));
 		}
+
 		// Send
 		while(msg_data_left(reqstate->body_msg))
 		{
