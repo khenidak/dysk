@@ -80,8 +80,7 @@ dyskctl mount-file --file {path to file}`,
 				printError(err)
 				os.Exit(1)
 			}
-			dysks := []*client.Dysk{&d}
-			printDysks(dysks)
+			printDysk(&d)
 		},
 	}
 
@@ -118,8 +117,7 @@ dyskctl get --deviceName dysk01`,
 				printError(err)
 				os.Exit(1)
 			}
-			dysks := []*client.Dysk{d}
-			printDysks(dysks)
+			printDysk(d)
 		},
 	}
 

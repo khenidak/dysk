@@ -54,18 +54,16 @@ func mount() {
 		os.Exit(1)
 	}
 
-	dysks := []*client.Dysk{&d}
-	printDysks(dysks)
-
+	printDysk(&d)
 }
 
 func getRandomDyskName() string {
 	var of = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	out := make([]rune, 20)
+	out := make([]rune, 8)
 	for i := range out {
 		out[i] = of[rand.Intn(len(of))]
 	}
-	return "d" + string(out)
+	return "dysk" + string(out)
 }
 
 func validateOutput() {
@@ -82,21 +80,45 @@ func printStatus(message string) {
 	fmt.Fprintf(os.Stderr, "Status:\n%s\n", message)
 }
 
+func printDyskLine(d *client.Dysk, w *tabwriter.Writer) {
+	isVhd := "No"
+	if d.Vhd {
+		isVhd = "Yes"
+	}
+	format := "%s\t%s\t%s\t%d\t%s\t%s"
+	toPrint := fmt.Sprintf(format, string(d.Type), d.Name, isVhd, d.SizeGB, d.AccountName, d.Path)
+
+	fmt.Fprintln(w, toPrint)
+}
+
+func printDyskHeader(w *tabwriter.Writer) {
+	fmt.Fprintln(w, "Type\tName\tVHD\tSizeGB\tAccountName\tPath")
+}
+
+func printDysk(d *client.Dysk) {
+	if "table" == output_format {
+		w := new(tabwriter.Writer)
+		w.Init(os.Stdout, 32, 2, 0, ' ', 0)
+		printDyskHeader(w)
+		printDyskLine(d, w)
+		w.Flush()
+	} else {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "    ")
+		err := enc.Encode(d)
+		if nil != err {
+			printError(err)
+		}
+	}
+}
 func printDysks(dysks []*client.Dysk) {
 	if "table" == output_format {
 		w := new(tabwriter.Writer)
 		w.Init(os.Stdout, 32, 2, 0, ' ', 0)
+		printDyskHeader(w)
 
-		fmt.Fprintln(w, "Type\tName\tVHD\tSizeGB\tAccountName\tPath")
 		for _, d := range dysks {
-			isVhd := "No"
-			if d.Vhd {
-				isVhd = "Yes"
-			}
-			format := "%s\t%s\t%s\t%d\t%s\t%s"
-			toPrint := fmt.Sprintf(format, string(d.Type), d.Name, isVhd, d.SizeGB, d.AccountName, d.Path)
-
-			fmt.Fprintln(w, toPrint)
+			printDyskLine(d, w)
 		}
 		w.Flush()
 	} else {
