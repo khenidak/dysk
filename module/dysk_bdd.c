@@ -246,7 +246,7 @@ void dysk_def_to_buffer(dysk_def *dd, char *buffer)
 	//type-devicename-sectorcount-accountname-accountKey-path-host-ip-lease-major-minor
 	const char *format = "%s\n%s\n%lu\n%s\n%s\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n";
 	sprintf(buffer, format,
-									(0 == dd->readOnly) ? "R" : "RW",
+									(0 == dd->readOnly) ? "RW" : "R",
 									dd->deviceName,
 									dd->sector_count,
 									dd->accountName,

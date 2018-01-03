@@ -912,7 +912,6 @@ task_result __send_az_req(w_task *this_task)
   		{
 				if(-EAGAIN == success || -EWOULDBLOCK == success) return retry_later;
 
-    		//printk("FAILED TO SEND MESSAGE: %d", success);
 				// drop connection here
 				connection_pool_put(pool, &reqstate->c, connection_failed);
 				reqstate->c = NULL;
