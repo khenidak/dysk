@@ -1,8 +1,8 @@
-#Build & Install #
+# Build & Install #
 
-##Build##
+## Build ##
 
-###Dysk Kernel Module###
+### Dysk Kernel Module ###
 If you don't want to build the module + CLI, you can download the binaries from the [release](https://github.com/khenidak/dysk/releases) page.
 
 
@@ -22,7 +22,7 @@ make
 
 > You can use ``` make clean ``` to cleanup the build artifacts 
 
-###Install###
+### Install ###
 
 ```
 cd module # or download location
@@ -33,7 +33,7 @@ lsmod | grep dysk
 dmesg # Dysk leaves success init log line
 ```
 
-###Dysk CLI###
+### Dysk CLI ###
 
 > Make sure that you install and configure [Go](https://golang.org/doc/install) 
 
@@ -42,7 +42,7 @@ cd ./dyskctl
 go build .
 ```
 
-##uninstall##
+## Uninstall ##
 
 ```
 sudo rmmod dysk

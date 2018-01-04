@@ -1,10 +1,10 @@
-#Dysk#
+# Dysk #
 
 Dysk mounts Azure disks as Linux block devices directly on VMs without dependency on the host. Dysks can be used within Azure VMs or on-prem machines.
 
 **Project Status**: Alpha
 
-##Motivation##
+## Motivation ##
 
 1. Pack more data disks per VM. Dysk has no restriction on max # of disks. Dysk can mount many disks per node (depending on CPU/Memory/Network).
 2. Quickly *attach* and *detach* disks to node (or node's workload). Dysk attaches/detaches disks in 1 second or less.
@@ -12,9 +12,9 @@ Dysk mounts Azure disks as Linux block devices directly on VMs without dependenc
 
 > check [Design](docs/design.md) for details on how dysk works.
 
-##How to use##
+## How to use ##
 
-> Please [build-install](docs/install.md) dysk kernel module before running the below commands.
+> Please [build-install](docs/build-install.md) dysk kernel module before running the below commands.
 
 Auto-Create and mount 2 GB Azure Page Blob as a block device
 ```
