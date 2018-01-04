@@ -10,11 +10,11 @@ Dysk mounts Azure disks as Linux block devices directly on VMs without dependenc
 2. Quickly *attach* and *detach* disks to node (or node's workload). Dysk attaches/detaches disks in 1 second or less.
 3. Treat Azure disks (in essence they are storage client) as workload (similar to pods in kubernetes). They start fast on nodes and move fast between nodes when needed. 
 
-> check [Design](docs/design.md) for details on how dysk works.
+> Check [Design](docs/design.md) for details on how dysk works.
 
 ## How to use ##
 
-> Please [build-install](docs/build-install.md) dysk kernel module before running the below commands.
+> Please [install](docs/build-install.md) dysk kernel module before running the below commands.
 
 Auto-Create and mount 2 GB Azure Page Blob as a block device
 ```
