@@ -884,7 +884,8 @@ static int dysk_revalidate(struct gendisk *gd)
 
 static int dysk_ioctl (struct block_device *bd, fmode_t mode, unsigned int cmd, unsigned long arg)
 {
-	printk(KERN_INFO "DYSK IO-CTL is GEO:%d CMD:%d", cmd == HDIO_GETGEO, cmd );
+	//DEBUG
+	//printk(KERN_INFO "DYSK IO-CTL is GEO:%d CMD:%d", cmd == HDIO_GETGEO, cmd );
   return -EINVAL;
 }
 // ----------------------------
