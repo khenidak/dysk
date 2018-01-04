@@ -242,9 +242,34 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 // --------------------------------
 // Utility Funcs
 // --------------------------------
+func (c *dyskclient) set_pageblob_size(d *Dysk) error {
+	c.ensureBlobService()
+	blobClient := c.blobClient
+	containerPath := path.Dir(d.Path)
+	containerPath = containerPath[1:]
+	blobContainer := blobClient.GetContainerReference(containerPath)
+
+	pageBlobName := path.Base(d.Path)
+	pageBlob := blobContainer.GetBlobReference(pageBlobName)
+
+	// Read Properties if read && is page blog then we are cool
+	getProps := storage.GetBlobPropertiesOptions{
+		LeaseID: d.LeaseId,
+	}
+
+	// Failed to read Properties?
+	if err := pageBlob.GetProperties(&getProps); nil != err {
+		return err
+	}
+
+	d.SizeGB = int(pageBlob.Properties.ContentLength / (1024 * 1024 * 1024))
+	return nil
+}
 func (c *dyskclient) pre_mount(d *Dysk) error {
 	d.AccountName = c.storageAccountName
 	d.AccountKey = c.storageAccountKey
+
+	c.set_pageblob_size(d) /* TODO: Merge size functions in one place for validation and set_pageblob_size */
 
 	byteSize := d.SizeGB * (1024 * 1024 * 1024)
 	if d.Vhd {
@@ -345,6 +370,7 @@ func (c *dyskclient) validateLease(d *Dysk) error {
 	return nil
 }
 
+/* TODO: use length constants */
 func (c *dyskclient) validateDysk(d *Dysk) error {
 	if 0 == len(d.Type) || (ReadOnly != d.Type && ReadWrite != d.Type) {
 		return fmt.Errorf("Invalid type. Must be R or RW")
