@@ -106,6 +106,8 @@ typedef struct http_response http_response; // Response Formatting - This struct
 // Forward declaration for request/response processing
 task_result __send_az_req(w_task *this_task);
 task_result __receive_az_response(w_task *this_task);
+void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reason);
+void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason);
 enum put_connection_reason
 {
 	connection_failed = 1<<0,
@@ -206,12 +208,15 @@ struct http_response
 // closes a connection
 static inline void connection_teardown(connection *c)
 {
-	if(c->sockt)
+	if(c)
 	{
-		c->sockt->ops->release(c->sockt);
-		if (c->sockt) sock_release(c->sockt);
+		if(c->sockt)
+		{
+			c->sockt->ops->release(c->sockt);
+			if (c->sockt) sock_release(c->sockt);
+		}
+		kfree(c);
 	}
-	kfree(c);
 }
 // Creates a connection
 static inline int connection_create(connection_pool *pool, connection **c)
@@ -268,7 +273,6 @@ void connection_pool_put(connection_pool *pool, connection **c, put_connection_r
 	{
 		// This connection has failed tear it down and don't enqueue it
 		connection_teardown(*c);
-		kfree(*c);
 		*c = NULL;
 		pool->count--;
 	}
@@ -495,7 +499,6 @@ int make_header(__reqstate *reqstate, char * header_buffer, size_t header_buffer
 
   authToken = kmalloc(AUTH_TOKEN_LENGTH, GFP_KERNEL);
 	if(!authToken) goto done;
-
 	memset(authToken,0, AUTH_TOKEN_LENGTH);
 
   success = calc_hmac(tfm_hmac_sha256,
@@ -541,10 +544,10 @@ int make_header(__reqstate *reqstate, char * header_buffer, size_t header_buffer
 	}
 	res = 0;
 done:
-	if(!date) kfree(date);
-	if(!signstring) kfree(signstring);
-	if(!authToken) kfree(authToken);
-	if(!encodedToken) kfree(encodedToken);
+	if(date) kfree(date);
+	if(signstring) kfree(signstring);
+	if(authToken) kfree(authToken);
+	if(encodedToken) kfree(encodedToken);
 	return res;
 }
 
@@ -565,7 +568,11 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 		free_all =1;
 		if(0 == resstate->try_new_request)
 		{
-			if(resstate->reqstate) kfree(resstate->reqstate);
+			if(resstate->reqstate)
+			{
+				kfree(resstate->reqstate);
+				resstate->reqstate = NULL;
+			}
 			io_end_request(this_task->d, resstate->req, 0);
 		}
 		else
@@ -576,7 +583,11 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 	}
 	else // Timeout, deletion & catastrophe (Request was not requeued).
 	{
-		if(resstate->reqstate) kfree(resstate->reqstate);
+		if(resstate->reqstate)
+		{
+			kfree(resstate->reqstate);
+			resstate->reqstate = NULL;
+		}
 		io_end_request(this_task->d, resstate->req, (clean_reason == clean_timeout) -EAGAIN ? : -EIO);
 		free_all = 1;
 	}
@@ -591,7 +602,11 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 	resstate->response_buffer = NULL;
 	resstate->httpresponse 		= NULL;
 
-	if(1 == free_all) kfree(resstate);
+	if(1 == free_all)
+	{
+		kfree(resstate);
+		resstate = NULL;
+	}
 }
 
 // Process Response + Copy buffers as needed
@@ -717,7 +732,6 @@ task_result __receive_az_response(w_task *this_task)
 			printk(KERN_ERR "** Dysk az module got an expected status code %d and will go into catastrophe mode for [%s]", resstate->httpresponse->status_code, this_task->d->def->deviceName);
 			return catastrophe;
 		}
-
 		// We are done, done.
 		// If this was a read request, copy data to request vector
 		// No reentrancy handling needed for this part
@@ -756,7 +770,7 @@ retry_new_request:
 	resstate->reqstate->req 		= req;
 	resstate->reqstate->azstate = resstate->azstate;
 
-	if(0 != queue_w_task(this_task, this_task->d, &__send_az_req, NULL, normal, resstate->reqstate))
+	if(0 != queue_w_task(this_task, this_task->d, &__send_az_req, &__clean_send_az_req, normal, resstate->reqstate))
 		return retry_now;
 
 	return res; // we have failed to get response now, but will try with new request
@@ -782,12 +796,20 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 			reqstate->header_sent 		= 0;
 			reqstate->body_sent 			= 0;
 			reqstate->try_new_request = 0;
-			if(reqstate->resstate) kfree(reqstate->resstate);
+			if(reqstate->resstate)
+			{
+				kfree(reqstate->resstate);
+				reqstate->resstate = NULL;
+			}
 		}
 	}
 	else // Timeout, deletion & catastrophe (Request was not requeued).
 	{
-		if(reqstate->resstate) kfree(reqstate->resstate);
+		if(reqstate->resstate)
+		{
+			kfree(reqstate->resstate);
+			reqstate->resstate = NULL;
+		}
 		if(reqstate->c) connection_pool_put(reqstate->azstate->pool,	&reqstate->c, connection_ok);
 		reqstate->c = NULL;
 
@@ -810,7 +832,11 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 	reqstate->header_msg		= NULL;
 	reqstate->body_msg			= NULL;
 
-	if (1 == free_all)  kfree(reqstate); // root object
+	if(1 == free_all)
+	{
+		kfree(reqstate); // root object
+		reqstate = NULL;
+	}
 }
 
 // Request send function

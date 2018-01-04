@@ -805,6 +805,7 @@ static void io_request(struct request_queue *q)
 		// Only xfer reqs
 		if(req->cmd_type != REQ_TYPE_FS)
 		{
+			printk(KERN_INFO "NON TRANSFER");
 			blk_start_request(req);
 			io_end_request(d,req, -EINVAL);
 			continue;
@@ -899,7 +900,11 @@ int io_hook(dysk *d)
 	blk_queue_max_hw_sectors(rq, 2 * 1024 * 4 );  /* 4 megs */
 	blk_queue_physical_block_size(rq, 512);
 	blk_queue_io_min(rq, 512);
-
+	// No support for discard and zeros for this version
+	//  TODO: Enable discard, 0s and write-same
+	blk_queue_max_write_zeroes_sectors(rq, 0);
+	blk_queue_max_discard_sectors(rq, 0);
+	blk_queue_max_write_same_sectors(rq, 0);
   rq->queuedata = d;
 
   gd = alloc_disk(DYSK_MINORS);
