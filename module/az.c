@@ -577,7 +577,8 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 		}
 		else
 		{
-			printk(KERN_INFO "RECV TRY NEW REQUEST");
+			//DEBUG
+			//printk(KERN_INFO "RECV TRY NEW REQUEST");
 		}
 		// else: another request has been queued with resstate->reqstate.. Leave it
 	}
@@ -711,7 +712,8 @@ task_result __receive_az_response(w_task *this_task)
 				else
 				{
 					//drop the connection to the pool.. now
-					printk(KERN_INFO "RCV CONNECTION CLOSE!");
+					//DEBUG
+					//printk(KERN_INFO "RCV CONNECTION CLOSE!");
 					connection_pool_put(pool, &c, connection_failed);
 					resstate->c = NULL;
 					goto retry_new_request;
@@ -1010,7 +1012,8 @@ task_result __send_az_req(w_task *this_task)
 			if(0 >= success)
   		{
 				if(-EAGAIN == success || -EWOULDBLOCK == success) return retry_later;
-				printk("FAILED TO SEND PUT BODY MESSAGE: %d", success);
+				//DEBUG
+				//printk("FAILED TO SEND PUT BODY MESSAGE: %d", success);
 
 				//drop connection here
 				connection_pool_put(pool, &reqstate->c, connection_failed);
