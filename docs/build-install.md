@@ -3,8 +3,10 @@
 ## Build ##
 
 ### Dysk Kernel Module ###
-If you don't want to build the module + CLI, you can download the binaries from the [release](https://github.com/khenidak/dysk/releases) page.
+If you don't want to build the module + CLI, you can download the binaries from the [release](https://github.com/khenidak/dysk/releases) - COMING SOON - page.
 
+
+> Module has been tested against 4.10.x and 4.11+ kernel versions
 
 1. Download kernel header
 

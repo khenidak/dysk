@@ -802,6 +802,9 @@ static void io_request(struct request_queue *q)
 		 io_end_request(d,req, -EINVAL);
 		 continue;
 		}
+		/* With disabling zeros, discard and write-same
+		 *  all incoming requests will be xfer
+		 *
 		// Only xfer reqs
 		if(req->cmd_type != REQ_TYPE_FS)
 		{
@@ -810,7 +813,7 @@ static void io_request(struct request_queue *q)
 			io_end_request(d,req, -EINVAL);
 			continue;
 		}
-
+	*/
 		if(WRITE == rq_data_dir(req) && 1 == d->def->readOnly)
 		{
 			printk(KERN_ERR "dysk %s is readonly, a write request was received", d->def->deviceName);
