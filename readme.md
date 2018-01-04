@@ -12,6 +12,11 @@ Dysk mounts Azure disks as Linux block devices directly on VMs without dependenc
 
 > Check [Design](docs/design.md) for details on how dysk works.
 
+
+
+[![asciicast](https://asciinema.org/a/kajaK23xjBUCyQsnwl1eSOcAI.png)](https://asciinema.org/a/kajaK23xjBUCyQsnwl1eSOcAI)
+
+
 ## How to use ##
 
 > Please [install](docs/build-install.md) dysk kernel module before running the below commands.
