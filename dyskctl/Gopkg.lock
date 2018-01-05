@@ -38,6 +38,12 @@
   version = "v1.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/khenidak/dysk"
+  packages = ["pkg/client"]
+  revision = "12b8330801c186f75b18ac2126c01a0c739c509d"
+
+[[projects]]
   name = "github.com/magiconair/properties"
   packages = ["."]
   revision = "d419a98cdbed11a922bf76f257b7c4be79b50e73"
@@ -124,6 +130,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a04228b962911aea5d1d7f46c29e9f06520b4957d096f336257d850fe81469a2"
+  inputs-digest = "99a73ef2cd54304408404616fd14b104eea68b6b5bd14f4841d664b47a143710"
   solver-name = "gps-cdcl"
   solver-version = 1
