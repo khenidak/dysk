@@ -10,14 +10,20 @@ If you don't want to build the module + CLI, you can download the binaries from 
 
 1. Download kernel header
 
-```
+```bash
 # Debian
 sudo apt-get install linux-headers-$(uname -r)
 ```
+2. Dependencies
 
-2. Build
-
+```bash
+sudo apt-get install -y update
+sudo apt-get install -y build-essential
 ```
+
+3. Build module
+
+```bash
 cd ./module
 make 
 ```
@@ -26,7 +32,7 @@ make
 
 ### Install ###
 
-```
+```bash
 cd module # or download location
 sudo insmod dysk.ko
 
@@ -37,16 +43,29 @@ dmesg # Dysk leaves success init log line
 
 ### Dysk CLI ###
 
-> Make sure that you install and configure [Go](https://golang.org/doc/install) 
+1. Dependencies
 
+```bash
+sudo apt-get install -y golang-go
+sudo curl -O https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.9.2.linux-amd64.tar.gz
+export PATH="/usr/local/go/bin/:$PATH"
+export GOPATH=$HOME/go
+go get github.com/golang/dep
+cd $GOPATH/src/github.com/golang/dep
+go install ./...
 ```
+
+2. Build cli
+
+```bash
 cd ./dyskctl 
-go build .
+make deps && make build
 ```
 
 ## Uninstall ##
 
-```
+```bash
 sudo rmmod dysk
 ```
 
