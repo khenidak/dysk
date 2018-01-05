@@ -31,6 +31,7 @@ Type                            Name                            VHD             
 RW                              dysk6Hjr5R52                    Yes                             2                               xdysk                           /dysks/dysk6Hjr5R52.vhd
 ```
 > When using the auto-create command the client library by default writes the vhd footer for you. This enables you to mount the disk using ARM if needed. You can disable this using the ``` -vhd ``` flag
+> Make sure the storage account supports http (not https)
 
 
 Dysks are block devices, so it can be used using common Linux commands
