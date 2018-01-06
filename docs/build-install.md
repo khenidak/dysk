@@ -48,8 +48,12 @@ dmesg # Dysk leaves success init log line
 ```bash
 curl -O https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.9.2.linux-amd64.tar.gz
+
+# You should consider configuring your paths in bash your bash profile
 export PATH="/usr/local/go/bin/:$PATH"
 export GOPATH=$HOME/go
+export PATH="$GOPATH/bin:$PATH" # add go bins to your path
+
 go get github.com/golang/dep
 cd $GOPATH/src/github.com/golang/dep
 go install ./...
@@ -58,7 +62,7 @@ go install ./...
 2. Build cli
 
 ```bash
-cd ./dyskctl 
+cd ./dyskctl  # $GOPATH/src/github.com/khenidak/dysk/dyskctl
 make deps && make build
 ```
 
