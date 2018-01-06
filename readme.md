@@ -8,7 +8,7 @@ Attach Azure disks in < 1 second. Attach as many as you want. Attach them wheree
 
 1. Pack more data disks per VM. Dysk has no restriction on max # of disks. Dysk can mount many disks per node (depending on CPU/Memory/Network).
 2. Quickly *attach* and *detach* disks to node (or node's workload). Dysk attaches/detaches disks in 1 second or less.
-3. Treat Azure disks (in essence they are storage client) as workload (similar to pods in kubernetes). They start fast on nodes and move fast between nodes when needed. 
+3. Treat Azure disks (in essence they are storage client) as workload (similar to pods in kubernetes). They start fast on nodes and move fast between nodes when needed.
 
 ## How it looks like ##
 
@@ -18,7 +18,7 @@ Attach Azure disks in < 1 second. Attach as many as you want. Attach them wheree
 
 ## How to use ##
 
-> Please [install](docs/build-install.md) dysk kernel module before running the below commands.
+> Dysk works with storage accounts V2[storage api version:2017-04-17]. Please [install](docs/build-install.md) dysk kernel module before running the below commands.
 
 Auto-Create and mount 2 GB Azure Page Blob as a block device
 ```
