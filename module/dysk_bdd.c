@@ -401,12 +401,9 @@ long dysk_mount(struct file *f, char *user_buffer)
 	dysk_def *dd = NULL;
 	dysk *d			 = NULL;
 
-	size_t len   = 0;
+	size_t len   = MAX_IN_OUT;
 	long ret     = -ENOMEM;
 	int mounted  = 0;
-
-	len = strnlen(user_buffer, MAX_IN_OUT);
-	if(0 == len) return -EINVAL;
 
 	// int buffer
 	buffer = kmalloc(len, GFP_KERNEL);
@@ -441,7 +438,6 @@ long dysk_mount(struct file *f, char *user_buffer)
 	// Convert to dd
 	if(0 != (ret = dysk_def_from_buffer(buffer, len, dd, out + strlen(dysk_err))))
 	{
-		memset(user_buffer,0, len);
 		if(0 != copy_to_user (user_buffer, out, strlen(out)))
 		{
 			printk(KERN_ERR "Dysk failed mount, failed to respond to user with:%s", out);
@@ -460,7 +456,6 @@ long dysk_mount(struct file *f, char *user_buffer)
 	// Add it and hook it up
 	if(0 != dysk_add(d,out + strlen(dysk_err)))
 	{
-		memset(user_buffer, 0, len);
 		if(0 != copy_to_user (user_buffer, out, strlen(out)))
 		{
 		 	printk(KERN_ERR "Dysk failed mount, failed to respond to user with:%s", out);
@@ -481,7 +476,6 @@ long dysk_mount(struct file *f, char *user_buffer)
 
 	// updated dysk
 	dysk_def_to_buffer(d->def, out + strlen(dysk_ok));
-	memset(user_buffer,0, len);
 
 	if(0 != copy_to_user (user_buffer, out, strlen(out)))
 	{
@@ -515,11 +509,8 @@ long dysk_unmount(struct file *f, char *user_buffer)
 
 	char line[DEVICE_NAME_LEN] = {0};
 
-	size_t len   = 0;
+	size_t len   = MAX_IN_OUT;
 	long ret     = -ENOMEM;
-
-	len = strnlen(user_buffer, MAX_IN_OUT);
-	if(0 == len) return -EINVAL;
 
 	// int buffer
 	buffer = kmalloc(len, GFP_KERNEL);
@@ -546,7 +537,6 @@ long dysk_unmount(struct file *f, char *user_buffer)
 
 	// assume error
 	memcpy(out, dysk_err, strlen(dysk_err));
-	memset(user_buffer,0, len);
 
 	if(0 != dysk_del(line, out + strlen(dysk_err)))
 	{
@@ -582,13 +572,10 @@ long dysk_get(struct file *f, char *user_buffer)
 	char *buffer = NULL;
 	char *out    = NULL;
 	dysk *d			 = NULL;
-	size_t len   = 0;
+	size_t len   = MAX_IN_OUT;
 	long ret     = -ENOMEM;
 
 	char line[DEVICE_NAME_LEN] = {0};
-
-	len = strnlen(user_buffer, MAX_IN_OUT);
-	if(0 == len) return -EINVAL;
 
 	// int buffer
 	buffer = kmalloc(len, GFP_KERNEL);
@@ -615,7 +602,6 @@ long dysk_get(struct file *f, char *user_buffer)
 
 	// assume error
 	memcpy(out, dysk_err, strlen(dysk_err));
- 	memset(user_buffer,0, len);
 
 	// Do we have it
 	if(NULL == (d = dysk_exist(line)))
@@ -641,7 +627,7 @@ long dysk_get(struct file *f, char *user_buffer)
 
 	// updated dysk
 	dysk_def_to_buffer(d->def, out + strlen(dysk_ok));
-	memset(user_buffer,0, len);
+	//memset(user_buffer,0, len);
 
 	if(0 != copy_to_user (user_buffer, out, strlen(out)))
 	{
