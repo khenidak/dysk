@@ -112,6 +112,7 @@ static dysk* dysk_exist(char *name)
 {
 	dysk *existing;
 	int found = 0;
+	spin_lock(&dysks->lock);
 	list_for_each_entry(existing, &dysks->head->list, list)
 	{
 		if(0 == strncmp(existing->def->deviceName, name, DEVICE_NAME_LEN))
@@ -120,6 +121,7 @@ static dysk* dysk_exist(char *name)
 			break;
 		}
 	}
+	spin_unlock(&dysks->lock);
 
 	if(1 == found) return existing;
 	return NULL;
