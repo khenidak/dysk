@@ -46,7 +46,6 @@ dmesg # Dysk leaves success init log line
 1. Dependencies
 
 ```bash
-sudo apt-get install -y golang-go
 sudo curl -O https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.9.2.linux-amd64.tar.gz
 export PATH="/usr/local/go/bin/:$PATH"

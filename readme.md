@@ -1,6 +1,6 @@
 # Dysk #
 
-Dysk mounts Azure disks as Linux block devices directly on VMs without dependency on the host. Dysks can be used within Azure VMs or on-prem machines.
+Attach Azure disks in < 1 second. Attach as many as you want. Attach them whereever you want. Dysk mounts Azure disks as Linux block devices directly on VMs without dependency on the host.
 
 **Project Status**: Alpha
 
