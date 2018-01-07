@@ -1,23 +1,27 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
-
 #include <linux/errno.h>
-
 #include <linux/slab.h>
 #include <linux/genhd.h>
-
 #include <linux/fs.h>
 #include <linux/types.h>
 #include <linux/hdreg.h>
 #include <linux/types.h>
 #include <linux/blkdev.h>
-
 #include <linux/bio.h>
+
+#include <linux/version.h>
 
 #include "dysk_utils.h"
 #include "dysk_bdd.h"
 #include "az.h"
+
+// We are heavily dependant on *newer* blkdev interfaces
+// You shouldn't be using that a kernel version that old anyway
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
+#error Dysk is for 4.10.0++ kernel versions
+#endif
 
 // ---------------------------------
 // Dysk Enpoint
