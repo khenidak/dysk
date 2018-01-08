@@ -18,7 +18,7 @@ Attach Azure disks in < 1 second. Attach as many as you want. Attach them wheree
 
 ## How to use ##
 
-> Dysk works with storage accounts V2[storage api version:2017-04-17]. Please [install](docs/build-install.md) dysk kernel module before running the below commands.
+> Dysk works with storage accounts V1 or V2 **standard SKU storage accounts** [storage api version:2017-04-17] for now. Please [install](docs/build-install.md) dysk kernel module before running the below commands.
 
 Auto-Create and mount 2 GB Azure Page Blob as a block device
 ```
