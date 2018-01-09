@@ -21,10 +21,13 @@
 // Queue
 #include <linux/kfifo.h>
 
+#include <linux/slab.h>
+
 #include "dysk_bdd.h"
 #include "dysk_utils.h"
 #include "az.h"
 
+#define AZ_SLAB_NAME "dysk_az_reqs"
 
 // Http Response processing
 #define AZ_RESPONSE_OK 				 		206 // As returned from GET
@@ -77,12 +80,22 @@ static const char* put_request_sign = "PUT\n\n\n%lu\n\n\n\n\n\n\n\n\nx-ms-date:%
 // Date/leaseId/Range-Start/Range-End/AccountName/Path
 static const char* get_request_sign = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
 
+/*
+	Notes on mem alloc:
+	===================
+	Each request is represented by __reqstate __resstate both handle
+	upstream and downstream data. These objects are allocated on
+	a single slab az_slab with GFP_NOIO. Objects they reference
+	all allocated normally via kmalloc + GFP_KERNEL.
+*/
 
 // -----------------------------
 // Module global State
 // ----------------------------
 // HMAC(SHA25)
 struct crypto_shash *tfm_hmac_sha256 = NULL;
+// for __reqstate __resstate allocation for *all dysks*.
+struct kmem_cache *az_slab;
 
 #define MAX_CONNECTIONS 			64 	 // Max concurrent conenctions
 #define ERR_FAILED_CONNECTION -999 // Used to signal inability to connection to server
@@ -575,7 +588,7 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 		{
 			if(resstate->reqstate)
 			{
-				kfree(resstate->reqstate);
+				kmem_cache_free(az_slab, resstate->reqstate);
 				resstate->reqstate = NULL;
 			}
 			io_end_request(this_task->d, resstate->req, 0);
@@ -591,7 +604,7 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 	{
 		if(resstate->reqstate)
 		{
-			kfree(resstate->reqstate);
+			kmem_cache_free(az_slab, resstate->reqstate);
 			resstate->reqstate = NULL;
 		}
 		io_end_request(this_task->d, resstate->req, (clean_reason == clean_timeout) -EAGAIN ? : -EIO);
@@ -610,7 +623,7 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 
 	if(1 == free_all)
 	{
-		kfree(resstate);
+		kmem_cache_free(az_slab, resstate);
 		resstate = NULL;
 	}
 }
@@ -668,7 +681,7 @@ task_result __receive_az_response(w_task *this_task)
 	// Allocate request state in case we needed to retry
 	if(!resstate->reqstate)
 	{
-		resstate->reqstate = kmalloc(sizeof(__reqstate), GFP_KERNEL);
+		resstate->reqstate = kmem_cache_alloc(az_slab, GFP_NOIO);
 		if(!resstate->reqstate) return retry_later;
 		memset(resstate->reqstate, 0, sizeof(__reqstate));
 	}
@@ -810,7 +823,7 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 			reqstate->try_new_request = 0;
 			if(reqstate->resstate)
 			{
-				kfree(reqstate->resstate);
+				kmem_cache_free(az_slab, reqstate->resstate);
 				reqstate->resstate = NULL;
 			}
 		}
@@ -819,7 +832,7 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 	{
 		if(reqstate->resstate)
 		{
-			kfree(reqstate->resstate);
+			kmem_cache_free(az_slab, reqstate->resstate);
 			reqstate->resstate = NULL;
 		}
 		if(reqstate->c) connection_pool_put(reqstate->azstate->pool,	&reqstate->c, connection_ok);
@@ -846,7 +859,7 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 
 	if(1 == free_all)
 	{
-		kfree(reqstate); // root object
+		kmem_cache_free(az_slab, reqstate); // root object
 		reqstate = NULL;
 	}
 }
@@ -894,7 +907,7 @@ task_result __send_az_req(w_task *this_task)
 	if(!reqstate->resstate)
 	{
 		// response state object
-		reqstate->resstate = kmalloc(sizeof(__resstate), GFP_KERNEL);
+		reqstate->resstate = kmem_cache_alloc(az_slab, GFP_NOIO);
 		if(!reqstate->resstate) return retry_now;
 		memset(reqstate->resstate, 0, sizeof(__resstate));
 	}
@@ -1065,7 +1078,7 @@ int az_do_request(dysk *d, struct request *req)
 	int success = 0;
 	 __reqstate *reqstate = NULL;
 
-	reqstate = kmalloc(sizeof(__reqstate), GFP_KERNEL);
+	reqstate = kmem_cache_alloc(az_slab, GFP_NOIO);
 	if(!reqstate) return -ENOMEM;
 	memset(reqstate, 0, sizeof(__reqstate));
 
@@ -1075,7 +1088,7 @@ int az_do_request(dysk *d, struct request *req)
 	success = queue_w_task(NULL, d, &__send_az_req, __clean_send_az_req, normal, reqstate);
 	if(0 != success)
 	{
-		if(reqstate) kfree(reqstate);
+		if(reqstate) kmem_cache_free(az_slab, reqstate);
 	}
 	return success;
 }
@@ -1140,6 +1153,7 @@ void az_teardown_for_dysk(dysk *d)
 // ---------------------------
 int az_init(void)
 {
+	int entry_size = 0;
 	// Allocate hash tfm
 	tfm_hmac_sha256 = crypto_alloc_shash("hmac(sha256)", 0, CRYPTO_ALG_ASYNC);
 	if (IS_ERR(tfm_hmac_sha256)) {
@@ -1147,9 +1161,20 @@ int az_init(void)
 		return -1;
 	}
 
+	/* Our slab services req state and res state, the difference in size is minimal*/
+	entry_size = sizeof(__reqstate) > sizeof(__resstate) ? sizeof(__reqstate) : sizeof(__resstate);
+	az_slab = kmem_cache_create(AZ_SLAB_NAME,
+															entry_size,
+															0, /*no special behavior */
+															0, /* no alignment a cache miss is ok, for now */
+															NULL /*let kernel create pages */);
+
+	if(!az_slab) return -1;
+
 	return 0;
 }
 void az_teardown(void)
 {
 	if(tfm_hmac_sha256) crypto_free_shash(tfm_hmac_sha256);
+	if(az_slab) kmem_cache_destroy(az_slab);
 }
