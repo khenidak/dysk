@@ -96,7 +96,7 @@ struct device *device;
 // List of current dysks
 static dyskslist dysks;
 // worker instance used by all dysks
-dysk_worker *default_worker;
+dysk_worker default_worker;
 
 // Forward
 int io_hook(dysk *d);
@@ -216,7 +216,7 @@ static inline int dysk_add(dysk *d, char* error)
 	}
 
 	spin_lock_init(&d->lock);
-	d->worker        = default_worker;
+	d->worker        = &default_worker;
 	if(0 != (success = az_init_for_dysk(d)))
 	{
 		sprintf(error, ERR_DYSK_ADD, d->def->deviceName, success);
@@ -964,19 +964,14 @@ int io_unhook(dysk *d)
 static void unload(void)
 {
 	// Worker tear down
-	if(default_worker)
-	{
-		dysk_worker_teardown(default_worker);
-		kfree(default_worker);
-	}
+	dysk_worker_teardown(&default_worker);
 
 	// stop endpoint
 	endpoint_stop();
 
-	// free the default worker
-	kfree(default_worker);
 	// deregister our major
 	if(-1 != dysk_major) unregister_blkdev(dysk_major, DYSK_BD_NAME);
+
 	// tear down az
 	az_teardown();
 }
@@ -1009,14 +1004,7 @@ static int __init _init_module(void)
 		return -1;
 	}
 
-	// Create default worker
-	default_worker = kmalloc(sizeof(dysk_worker), GFP_KERNEL);
-	if(!default_worker)
-	{
-		unload();
-		return -ENOMEM;
-	}
-	if(0 != (success = dysk_worker_init(default_worker)))
+	if(0 != (success = dysk_worker_init(&default_worker)))
 	{
 		printk(KERN_INFO "Dysk - failed tp init the worker, module is in failed state");
 		unload();
@@ -1025,7 +1013,7 @@ static int __init _init_module(void)
 
 	// Although the head does not do anywork, we need it
 	// during delete dysk routing check dysk_del(..)
-	dysks.head.worker = default_worker;
+	dysks.head.worker = &default_worker;
 
   printk(KERN_INFO "Dysk init routine completed successfully");
   return 0;
