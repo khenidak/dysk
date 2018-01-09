@@ -130,8 +130,11 @@ static inline void execute(dysk_worker *dw, w_task *w)
 			case retry_later: break;
 			case throttle_dysk:
 			{
-				if(0 == d->throttle_until) d->throttle_until= DYSK_THROTTLE_DEFAULT;
-				printk(KERN_INFO "dysk:%s is entring throttling mode", d->def->deviceName);
+				if(0 == d->throttle_until)
+				{
+					d->throttle_until = DYSK_THROTTLE_DEFAULT;
+					printk(KERN_INFO "dysk:%s is entring throttling mode", d->def->deviceName);
+				}
 				goto dequeue_task;
 			}
 			case catastrophe:
