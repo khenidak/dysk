@@ -80,7 +80,7 @@ struct __dyskdelstate{
 
 struct dyskslist{
 	spinlock_t lock;
-	dysk *head;
+	dysk head;
 };
 
 // --------------------------
@@ -94,7 +94,7 @@ static int dysk_major    	= -1;
 struct class *class;
 struct device *device;
 // List of current dysks
-static dyskslist *dysks;
+static dyskslist dysks;
 // worker instance used by all dysks
 dysk_worker *default_worker;
 
@@ -116,8 +116,8 @@ static dysk* dysk_exist(char *name)
 {
 	dysk *existing;
 	int found = 0;
-	spin_lock(&dysks->lock);
-	list_for_each_entry(existing, &dysks->head->list, list)
+	spin_lock(&dysks.lock);
+	list_for_each_entry(existing, &dysks.head.list, list)
 	{
 		if(0 == strncmp(existing->def->deviceName, name, DEVICE_NAME_LEN))
 		{
@@ -125,7 +125,7 @@ static dysk* dysk_exist(char *name)
 			break;
 		}
 	}
-	spin_unlock(&dysks->lock);
+	spin_unlock(&dysks.lock);
 
 	if(1 == found) return existing;
 	return NULL;
@@ -183,16 +183,16 @@ static inline int dysk_del(char* name, char* error)
 	d->status = DYSK_DELETING;
 
 	// remove it from list
-	spin_lock(&dysks->lock);
+	spin_lock(&dysks.lock);
 	list_del(&d->list);
-	spin_unlock(&dysks->lock);
+	spin_unlock(&dysks.lock);
 
 	// setup async part
 	dyskdelstate->d = d;
 
 	// we can not fail here, if no mem keep trying
 	while(0 != queue_w_task(NULL,
-													dysks->head /* we send head because it is always active */,
+													&dysks.head /* we send head because it is always healthy dummy dysk */,
 													&__del_dysk_async,
 													NULL /* we depend on genearl purpose clean func */,
 													no_throttle,
@@ -240,9 +240,9 @@ static inline int dysk_add(dysk *d, char* error)
 		return -1;
 	}
 
-	spin_lock(&dysks->lock);
-	list_add(&d->list, &dysks->head->list);
-	spin_unlock(&dysks->lock);
+	spin_lock(&dysks.lock);
+	list_add(&d->list, &dysks.head.list);
+	spin_unlock(&dysks.lock);
 
 	return 0;
 }
@@ -672,8 +672,8 @@ long dysk_list(struct file *f, char *user_buffer)
 	memcpy(out, dysk_ok, strlen(dysk_ok));
 	idx += strlen(dysk_ok);
 	// Build response string
-  spin_lock(&dysks->lock);
-	list_for_each_entry(d, &dysks->head->list, list)
+  spin_lock(&dysks.lock);
+	list_for_each_entry(d, &dysks.head.list, list)
 	{
 		sprintf(buffer_line, format, d->def->deviceName);
 		len = strlen(buffer_line);
@@ -686,7 +686,7 @@ long dysk_list(struct file *f, char *user_buffer)
 		// Reset buffer
 		memset(buffer_line, 0,  DEVICE_NAME_LEN+1);
 	}
-	spin_unlock(&dysks->lock);
+	spin_unlock(&dysks.lock);
 
 	// Copy to user buffer
 	if(0 != copy_to_user(user_buffer, out, strlen(out)))
@@ -979,32 +979,13 @@ static void unload(void)
 	if(-1 != dysk_major) unregister_blkdev(dysk_major, DYSK_BD_NAME);
 	// tear down az
 	az_teardown();
-	//tear down dysks
-	if(dysks)
-	{
-		// by then we assume it has zero dysks?
-		if(dysks->head) kfree(dysks->head);
-		kfree(dysks);
-	}
 }
 
 static int __init _init_module(void)
 {
 	int success = 0;
-	// Dysks list
-	dysks = kmalloc(sizeof(dyskslist), GFP_KERNEL);
-	if(!dysks)  return -ENOMEM;
-	memset(dysks, 0, sizeof(dyskslist));
-
-	dysks->head = kmalloc(sizeof(dysk), GFP_KERNEL);
-	if(!dysks->head)
-	{
-		kfree(dysks);
-		return -ENOMEM;
-	}
-	memset(dysks->head, 0, sizeof(dysk));
- 	INIT_LIST_HEAD(&dysks->head->list);
-	spin_lock_init(&dysks->lock);
+	INIT_LIST_HEAD(&dysks.head.list);
+	spin_lock_init(&dysks.lock);
 
 	// Azure transfer library
 	// Az module Init
@@ -1044,7 +1025,7 @@ static int __init _init_module(void)
 
 	// Although the head does not do anywork, we need it
 	// during delete dysk routing check dysk_del(..)
-	dysks->head->worker = default_worker;
+	dysks.head.worker = default_worker;
 
   printk(KERN_INFO "Dysk init routine completed successfully");
   return 0;
