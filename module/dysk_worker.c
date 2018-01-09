@@ -30,7 +30,7 @@ all tasks are expected to be none-blocking mode.
 
 #define W_TASK_TIMEOUT jiffies + (30 * HZ)
 #define DYSK_THROTTLE_DEFAULT jiffies + (2 * HZ)
-
+#define WORKER_SLAB_NAME "dysk_worker_tasks"
 // Default clean up function for state, we use kfree
 void  default_w_task_state_clean(w_task *this_task, task_clean_reason clean_reason)
 {
@@ -46,26 +46,10 @@ int queue_w_task(w_task *parent_task, dysk *d, w_task_exec_fn exec_fn, w_task_st
 	w_task *w 			= NULL;
 	dysk_worker *dw = NULL;
 
-	if(!exec_fn)
-	{
-		printk(KERN_INFO "bad exec");
-		return -1;
-	}
-
-	if(!d)
-	{
-		printk(KERN_INFO "bad d");
-		return -1;
-	}
-	w = kmalloc(sizeof(w_task), GFP_KERNEL);
-	if(!w)
-	{
-		printk(KERN_INFO "NO MEM FOR TASK");
-		return -ENOMEM;
-	}
-
-	memset(w, 0, sizeof(w_task));
 	dw = d->worker;
+	w = kmem_cache_alloc(dw->tasks_slab, GFP_NOIO);
+	if(!w) return -ENOMEM;
+	memset(w, 0, sizeof(w_task));
 
 	w->mode 			= mode;
 	w->state 			= state;
@@ -165,7 +149,7 @@ dequeue_task:
 	// clean
 	w->clean_fn(w, clean_reason);
 	// free
-	kfree(w);
+	kmem_cache_free(dw->tasks_slab, w);
 }
 // big loop
 static int work_thread_fn(void *args)
@@ -198,8 +182,20 @@ static int work_thread_fn(void *args)
 int dysk_worker_init(dysk_worker *dw)
 {
 	w_task *w = NULL;
+	// allocate slab
+	dw->tasks_slab = kmem_cache_create(WORKER_SLAB_NAME,
+																		 sizeof(w_task),
+																		 0, /*no special behavior */
+																		 0, /* no alignment a cache miss is ok, for now */
+																		 NULL /*let kernel create pages */);
 
-	w = kmalloc(sizeof(w_task), GFP_KERNEL);
+	if(NULL == dw->tasks_slab)
+	{
+		printk(KERN_ERR "Failed to create slab cache for worker");
+		goto fail;
+	}
+
+	w = kmem_cache_alloc(dw->tasks_slab, GFP_NOIO);
 	if(!w) goto fail;
 	memset(w, 0, sizeof(w_task));
 
@@ -243,5 +239,7 @@ void dysk_worker_teardown(dysk_worker *dw)
 		}
 	}
 	// if head object is there free it.
-	if(dw->head) kfree(dw->head);
+	if(dw->head) kmem_cache_free(dw->tasks_slab, dw->head);
+	// destroy the cache
+	if(dw->tasks_slab) kmem_cache_destroy(dw->tasks_slab);
 }

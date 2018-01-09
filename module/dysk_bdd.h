@@ -5,6 +5,7 @@
 #include <linux/types.h>
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
+#include <linux/slab.h>
 
 //Completion variables
 #include <linux/completion.h>
@@ -156,6 +157,13 @@ struct dysk_worker
 	spinlock_t lock;
 	// Worker thread
 	struct task_struct *worker_thread;
+	 /*
+		if super dysks (dysks with dedicated worker,
+		or smaller # of dysks share worker) ever became
+		a thing then slab should be elvated to dysk_bdd
+		and shared across all workers
+	 */
+	struct kmem_cache *tasks_slab;
 };
 
 // worker task -- linked list
