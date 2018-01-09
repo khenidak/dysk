@@ -151,9 +151,6 @@ static inline void execute(dysk_worker *dw, w_task *w)
 		goto dequeue_task;
 	}
 
-	if(taskresult == retry_now || taskresult == retry_later)
-		dw->dont_sleep = 1;
-
 	return;
 dequeue_task:
 	// dequeue
@@ -182,8 +179,12 @@ static int work_thread_fn(void *args)
 		list_for_each_entry_safe(t, next, &dw->head->list, list)
 			execute(dw, t);
 
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(HZ /1000); /*TODO: There has to be a better way than this */
+		if(0 == atomic_read(&dw->count_tasks))
+		{
+			// Yield cpu if we have no work.
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(HZ /1000);
+		}
 	}
 	dw->working = 0;
 	return 0;

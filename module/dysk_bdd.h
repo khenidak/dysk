@@ -156,8 +156,6 @@ struct dysk_worker
 	spinlock_t lock;
 	// Worker thread
 	struct task_struct *worker_thread;
-	// don't sleep - Set if retryable tasks are found in queue
-	int dont_sleep;
 };
 
 // worker task -- linked list
