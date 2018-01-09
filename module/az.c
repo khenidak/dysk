@@ -381,7 +381,8 @@ static inline int process_response(char* response, size_t response_length, http_
 	// sscanf limitation for status line process, check below
 	char temp[32] 		 = {0};
 	char *idx_of_first = NULL;
-
+	int has_content_length = 0;
+	size_t scan_for_content_length = 0;
 	// append bytes received
 	res->bytes_received += bytes_received;
 
@@ -402,8 +403,11 @@ static inline int process_response(char* response, size_t response_length, http_
 		res->idx += cut + strlen(rn);
 	}
 
-	// find content length if response code is not created.
-	if(0 != res->status_code && AZ_RESPONSE_CREATED != res->status_code && -1 == res->content_length)
+	// Standard SKU: on 201 Created, a chunk encoding with no content length
+	// Premium SKU: on 201 created, a content length:- will be provided
+	scan_for_content_length = res->bytes_received > 1024 ? 1024 : res->bytes_received;
+	has_content_length = NULL == strnstr(response, content_length, scan_for_content_length) ? 0 : 1;
+	if(0 != res->status_code && 1 == has_content_length)
 	{
 		//headers, we are only intersted in Content-Length
 		while(res->idx < response_length)
