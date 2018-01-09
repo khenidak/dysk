@@ -59,7 +59,7 @@ static const char* put_request_head = "PUT %s?comp=page HTTP/1.1\r\n"
 													 						"x-ms-range: bytes=%lu-%lu\r\n"
 													 						"x-ms-date: %s\r\n"
 													 						"x-ms-version: 2017-04-17\r\n"
-													 						"Authorization: SharedKeyLite %s:%s\r\n\r\n";
+													 						"Authorization: SharedKey %s:%s\r\n\r\n";
 // GET REQUEST HEADER
 //PATH/HOST/Lease/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
 static const char* get_request_head = "GET %s HTTP/1.1\r\n"
@@ -68,14 +68,14 @@ static const char* get_request_head = "GET %s HTTP/1.1\r\n"
 												 							"Content-Length: %d\r\n"
 												 							"x-ms-range: bytes=%lu-%lu\r\n"
 												 							"x-ms-date: %s\r\n"
-												 							"Authorization: SharedKeyLite %s:%s\r\n"
+												 							"Authorization: SharedKey %s:%s\r\n"
 												 							"x-ms-version: 2017-04-17\r\n\r\n";
 
 // StringToSign: https://docs.microsoft.com/en-us/rest/api/storageservices/authentication-for-the-azure-storage-services
-// Date/LeaseId/Range-Start/Range-End/AccountName/Path
-static const char* put_request_sign = "PUT\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-page-write:update\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s?comp=page";
+// Content-Length/Date/LeaseId/Range-Start/Range-End/AccountName/Path
+static const char* put_request_sign = "PUT\n\n\n%lu\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-page-write:update\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s\ncomp:page";
 // Date/leaseId/Range-Start/Range-End/AccountName/Path
-static const char* get_request_sign = "GET\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
+static const char* get_request_sign = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
 
 
 // -----------------------------
@@ -489,6 +489,7 @@ int make_header(__reqstate *reqstate, char * header_buffer, size_t header_buffer
 	{
 		// Date/Range-Start/Range-End/AccountName/Path
 		sprintf(signstring, put_request_sign,
+												blk_rq_bytes(req),
 												date,
 												d->def->lease_id,
 												range_start,
@@ -727,7 +728,12 @@ task_result __receive_az_response(w_task *this_task)
 
 	if(1 == http_response_completed(resstate->httpresponse, resstate->response_buffer))
 	{
-		if(1 == az_is_catastrophe(resstate->httpresponse->status_code)) return catastrophe;
+		if(1 == az_is_catastrophe(resstate->httpresponse->status_code))
+		{
+			printk(KERN_ERR "dysk:[%s] entered catastrophe mode because http response was:%d-%s", this_task->d->def->deviceName, resstate->httpresponse->status_code, resstate->httpresponse->status);
+			return catastrophe;
+		}
+
 		if(1 == az_is_throttle(resstate->httpresponse->status_code)) goto retry_throttle;
 		if(1 != az_is_done(resstate->httpresponse->status_code))
 		{
