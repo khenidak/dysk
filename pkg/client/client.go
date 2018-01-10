@@ -126,6 +126,7 @@ func (c *dyskclient) closeDeviceFile() error {
 }
 
 func (c *dyskclient) Mount(d *Dysk) error {
+        fmt.Println("Mount funct")
 	if err := c.openDeviceFile(); nil != err {
 		return err
 	}
@@ -137,6 +138,7 @@ func (c *dyskclient) Mount(d *Dysk) error {
 	}
 
 	as_string := dysk2string(d)
+        fmt.Println(as_string)
 	buffer := bufferize(as_string)
 
 	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTLMOUNTDYSK, uintptr(unsafe.Pointer(&buffer[0])))
@@ -315,6 +317,7 @@ func (c *dyskclient) get(deviceName string) (*Dysk, error) {
 
 func (c *dyskclient) validateLease(d *Dysk) error {
 
+        fmt.Println("validateLease")
 	blobClient := c.blobClient
 	containerPath := path.Dir(d.Path)
 	containerPath = containerPath[1:]
