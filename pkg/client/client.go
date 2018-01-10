@@ -16,7 +16,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/rubiojr/go-vhd/vhd"
 )
-
+kdjfkd
 const (
 	deviceFile = "/dev/dysk"
 	// IOCTL Command Codes
