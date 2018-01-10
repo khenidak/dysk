@@ -16,7 +16,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/rubiojr/go-vhd/vhd"
 )
-kdjfkd
 const (
 	deviceFile = "/dev/dysk"
 	// IOCTL Command Codes
@@ -49,6 +48,7 @@ type dyskclient struct {
 }
 
 func CreateClient(account string, key string) DyskClient {
+        fmt.Println("createclient")
 	c := dyskclient{
 		storageAccountName: account,
 		storageAccountKey:  key,
@@ -67,7 +67,8 @@ func (c *dyskclient) ensureBlobService() error {
 }
 
 func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error) {
-	if err := c.ensureBlobService(); nil != err {
+	fmt.Println("create page blob")
+        if err := c.ensureBlobService(); nil != err {
 		return "", err
 	}
 
