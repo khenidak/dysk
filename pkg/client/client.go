@@ -33,7 +33,7 @@ type DyskClient interface {
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error)
-    LeaseAndValidate(d *Dysk) (string, error)
+	LeaseAndValidate(d *Dysk) (string, error)
 }
 
 type moduleResponse struct {
@@ -67,7 +67,7 @@ func (c *dyskclient) ensureBlobService() error {
 }
 
 func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error) {
-        if err := c.ensureBlobService(); nil != err {
+	if err := c.ensureBlobService(); nil != err {
 		return "", err
 	}
 
@@ -237,15 +237,15 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 }
 
 func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
-    if 0 < len(d.LeaseId) {
-        err := c.validateLease(d)
-        if nil != err {
+	if 0 < len(d.LeaseId) {
+		err := c.validateLease(d)
+		if nil != err {
 			fmt.Println("lease not valid")
 			pageBlob, err := c.get_pageblob(d)
 			if nil != err {
 				return "", err
 			} else {
-		        leaseId, err := c.lease(pageBlob, d.BreakLease)
+				leaseId, err := c.lease(pageBlob, d.BreakLease)
 				if nil != err {
 					return "", err
 				} else {
@@ -255,14 +255,14 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 		} else {
 			return d.LeaseId, nil
 		}
-    } else {
+	} else {
 		fmt.Println("lease id not provided")
 		if d.AutoLease {
 			pageBlob, err := c.get_pageblob(d)
 			if nil != err {
 				return "", err
 			} else {
-		        leaseId, err := c.lease(pageBlob, d.BreakLease)
+				leaseId, err := c.lease(pageBlob, d.BreakLease)
 				if nil != err {
 					return "", err
 				} else {
@@ -385,8 +385,8 @@ func (c *dyskclient) get(deviceName string) (*Dysk, error) {
 }
 
 func (c *dyskclient) lease(pageBlob *storage.Blob, breakLeaseFlag bool) (string, error) {
-    fmt.Println("acquiring new lease")
-    leaseId, err := pageBlob.AcquireLease(-1, "", nil)
+	fmt.Println("acquiring new lease")
+	leaseId, err := pageBlob.AcquireLease(-1, "", nil)
 	if nil != err {
 		if breakLeaseFlag {
 			fmt.Println("break lease")

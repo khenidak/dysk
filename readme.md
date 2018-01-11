@@ -33,6 +33,29 @@ RW                              dysk6Hjr5R52                    Yes             
 > When using the auto-create command the client library by default writes the vhd footer for you. This enables you to mount the disk using ARM if needed. You can disable this using the ``` -vhd ``` flag
 > Make sure the storage account supports http (not https)
 
+Mount existing Azure Page Blob (with or without a lease id) 
+```
+sudo dyskctl mount -a {STORAGE ACCOUNT NAME} -k {STORAGE ACCOUNT KEY} -c {CONTAINER NAME} -d {DISK NAME} -i {LEASE ID}
+
+## output
+Type                            Name                            VHD                             SizeGB                          AccountName                     Path
+RW                              dysk1cmwC5uU                    Yes                             2                               dyskdemo                        /dysks/dysk1cmwC5uU.vhd
+```
+
+If you are seeing error `storage: service returned error: StatusCode=409, ErrorCode=LeaseAlreadyPresent, ErrorMessage=There is already a lease present.`, you can set the `--break-lease` flag to `true` to break the existing lease.
+```
+sudo dyskctl mount -a {STORAGE ACCOUNT NAME} -k {STORAGE ACCOUNT KEY} -c {CONTAINER NAME} -d {DISK NAME} -i {LEASE ID} -b true
+
+## output
+lease not valid
+acquiring new lease
+break lease
+Type                            Name                            VHD                             SizeGB                          AccountName                     Path
+RW                              dysk1cmwC5uU                    Yes                             2                               dyskdemo                        /dysks/dysk1cmwC5uU.vhd
+```
+
+> If you do not provide a `--lease-id`, you will most likely need to set the `--break-lease` flag to `true` to break any existing lease on it. Unless it has been previously released.
+
 
 Dysks are block devices, so it can be used using common Linux commands
 
