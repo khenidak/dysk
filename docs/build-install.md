@@ -21,7 +21,12 @@ This docker image, downloads and build dysk kernel module based on your kernel v
 > The image now depends on Ubuntu image, a slimer alpine version is coming soon
 
 ```bash
-docker run --rm -it --privileged  -v /usr/src:/usr/src -v /lib/modules:/lib/modules khenidak/dysk-installer:1.0
+docker run --rm \
+	-it \
+	--privileged \
+	-v /usr/src:/usr/src \
+	-v /lib/modules:/lib/modules \
+	khenidak/dysk-installer:1.0
 ```
 
 #### Manually ####
