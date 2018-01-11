@@ -10,7 +10,7 @@ If you don't want to build the module + CLI, you can download the binaries from 
 
 #### Using Docker ####
 
-This docker image, downloads and build dysk kernel module based on your kernel versions
+This docker image, downloads and build dysk kernel module based on your kernel version
 
 1. It has to run using ```--privileged``` because it installs a kernel module
 2. directories ```/usr/src``` and ```/lib/modules``` are needed for module install (and header downloads)
