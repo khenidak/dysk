@@ -29,7 +29,7 @@ docker run --rm \
 	khenidak/dysk-installer:1.0
 ```
 
-#### Manually ####
+#### Manual Build & Install ####
 1. Download kernel header
 
 ```bash
@@ -65,6 +65,27 @@ dmesg # Dysk leaves success init log line
 
 ### Dysk CLI ###
 
+#### Using Docker ###
+
+A docker image is the easiest way to use the command line without clone + build (manual steps).
+
+```bash
+# run listing 
+docker run --rm \
+	-it --privileged \
+	-v /etc/ssl/certs:/etc/ssl/certs:ro \
+	khenidak/dysk-cli:0.0.1 \ 
+	list
+
+# run a mount using auto create
+docker run --rm \
+	-it --privileged \
+	-v /etc/ssl/certs:/etc/ssl/certs:ro \
+	khenidak/dysk-cli:0.0.1 \ 
+	mount auto-create -a {account-name} -k {account-key}
+```
+
+#### Manual ####
 1. Dependencies
 
 ```bash
