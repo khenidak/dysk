@@ -33,7 +33,7 @@ type DyskClient interface {
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error)
-        LeaseAndValidate(d *Dysk) (string, error)
+    LeaseAndValidate(d *Dysk) (string, error)
 }
 
 type moduleResponse struct {
@@ -123,7 +123,7 @@ func (c *dyskclient) closeDeviceFile() error {
 }
 
 func (c *dyskclient) Mount(d *Dysk) error {
-        fmt.Println("Mount funct")
+    fmt.Println("Mount funct")
 	if err := c.openDeviceFile(); nil != err {
 		return err
 	}
@@ -135,7 +135,7 @@ func (c *dyskclient) Mount(d *Dysk) error {
 	}
 
 	as_string := dysk2string(d)
-        fmt.Println("sys call: %s", as_string)
+	fmt.Println("sys call: %s", as_string)
 	buffer := bufferize(as_string)
 
 	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTLMOUNTDYSK, uintptr(unsafe.Pointer(&buffer[0])))
@@ -240,53 +240,77 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 
 func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 	fmt.Println("LeaseAndValidate")
-        if 0 < len(d.LeaseId) {
-                err := c.validateLease(d)
-                if nil != err {
-			fmt.Println("lease not valid")
-			blobClient := c.blobClient
-			containerPath := path.Dir(d.Path)
-			containerPath = containerPath[1:]
-			blobContainer := blobClient.GetContainerReference(containerPath)
-
-			fmt.Println("container")
-			exists, err := blobContainer.Exists()
-			if nil != err {
-				return "", err
-			}
-			if !exists {
-				return "", fmt.Errorf("Container at %s does not exist", d.Path)
-			}
-
-			pageBlobName := path.Base(d.Path)
-			pageBlob := blobContainer.GetBlobReference(pageBlobName)
-
-			fmt.Println("blob")
-			exists, err = pageBlob.Exists()
-			if nil != err {
-				return "", err
-			}
-			if !exists {
-				return "", fmt.Errorf("Blob at %s does not exist", d.Path)
-			}
-			fmt.Println("Lease acquiring")
-		        leaseId, err := c.lease(pageBlob, d.BreakLease)
+    if 0 < len(d.LeaseId) {
+        err := c.validateLease(d)
+        if nil != err {
+			fmt.Println("lease not valid, get pageblob")
+			pageBlob, err := c.get_pageblob(d)
 			if nil != err {
 				return "", err
 			} else {
-				return leaseId, nil
+				fmt.Println("Lease acquiring")
+		        leaseId, err := c.lease(pageBlob, d.BreakLease)
+				if nil != err {
+					return "", err
+				} else {
+					return leaseId, nil
+				}
 			}
 		} else {
 			fmt.Println("lease is valid")
 			return d.LeaseId, nil
 		}
-        } else {
-		return "", fmt.Errorf("Missing lease id for %s", d.Path)
+    } else {
+		fmt.Println("lease id not provided")
+		if d.AutoLease {
+			pageBlob, err := c.get_pageblob(d)
+			if nil != err {
+				return "", err
+			} else {
+				fmt.Println("Lease acquiring")
+		        leaseId, err := c.lease(pageBlob, d.BreakLease)
+				if nil != err {
+					return "", err
+				} else {
+					return leaseId, nil
+				}
+			}
+		} else {
+			return "", fmt.Errorf("--lease-id is not provided and --auto-lease is set to false.")
+		} 
+		
 	}
 }
 // --------------------------------
 // Utility Funcs
 // --------------------------------
+func (c *dyskclient) get_pageblob(d *Dysk) (*storage.Blob, error) {
+	blobClient := c.blobClient
+	containerPath := path.Dir(d.Path)
+	containerPath = containerPath[1:]
+	blobContainer := blobClient.GetContainerReference(containerPath)
+
+	exists, err := blobContainer.Exists()
+	if nil != err {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("Container at %s does not exist", d.Path)
+	}
+
+	pageBlobName := path.Base(d.Path)
+	pageBlob := blobContainer.GetBlobReference(pageBlobName)
+
+	exists, err = pageBlob.Exists()
+	if nil != err {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("Blob at %s does not exist", d.Path)
+	}
+
+	return pageBlob, nil
+}
 func (c *dyskclient) set_pageblob_size(d *Dysk) error {
 	c.ensureBlobService()
 	blobClient := c.blobClient
@@ -321,7 +345,7 @@ func (c *dyskclient) pre_mount(d *Dysk) error {
 		byteSize -= vhd.VHD_HEADER_SIZE
 	}
 	d.sectorCount = uint64(byteSize / 512)
-	if d.AutoLease && !d.AutoCreate  {
+	if !d.AutoCreate  {
 		leaseId, err := c.LeaseAndValidate(d)
 		if nil != err {
 			return err

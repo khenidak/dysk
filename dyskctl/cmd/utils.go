@@ -52,10 +52,10 @@ func mount() {
 	d.BreakLease = breakLeaseFlag
 
 	err = dyskClient.Mount(&d)
-        if nil != err {
-                printError(err)
-                        os.Exit(1)
-        }
+    if nil != err {
+        printError(err)
+        os.Exit(1)
+    }
 	printDysk(&d)
 }
 

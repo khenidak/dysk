@@ -23,7 +23,7 @@ var (
 	size         uint
 	vhdFlag      bool
 	readOnlyFlag bool
-        autoLeaseFlag bool
+	autoLeaseFlag bool
 	breakLeaseFlag bool
 
 	autoCreate bool
@@ -149,10 +149,10 @@ func init() {
 	mountCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
 	mountCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage storage container name)")
 	mountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
-        mountCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "lease id of an existing blob")
+	mountCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "lease id of an existing blob")
 	mountCmd.PersistentFlags().BoolVarP(&vhdFlag, "vhd", "v", true, "writes the vhd footer to the blob page")
 	mountCmd.PersistentFlags().BoolVarP(&readOnlyFlag, "read-only", "r", false, "mount dysk as read only")
-        mountCmd.PersistentFlags().BoolVarP(&autoLeaseFlag, "auto-lease", "l", true, "create lease if not provided")
+	mountCmd.PersistentFlags().BoolVarP(&autoLeaseFlag, "auto-lease", "l", true, "create lease if not provided")
 	mountCmd.PersistentFlags().BoolVarP(&breakLeaseFlag, "break-lease", "b", false, "allow breaking of existing lease")
 
 	// MOUNT CREATE WE NEED SIZE //
