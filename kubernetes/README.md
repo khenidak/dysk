@@ -4,12 +4,18 @@
 kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="foo/dysk"
 ```
 
-## 2. install flex volume driver on every linux agent node
+## 2. install flexvolume driver on every linux agent node
+Please make sure dysk driver is already installed on every linux agent node
 ```
 sudo mkdir -p /etc/kubernetes/volumeplugins/foo~dysk
 cd /etc/kubernetes/volumeplugins/foo~dysk
 sudo wget https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk
 sudo chmod a+x dysk
+
+wget https://raw.githubusercontent.com/andyzhangx/Demo/master/linux/flexvolume/dysk/4.11.0-1016-azure/dyskctl
+chmod a+x dyskctl
+# test dysk driver is installed
+sudo ./dyskctl list
 ```
 #### Note:
 Make sure `jq` package is installed on every node: 
