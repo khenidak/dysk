@@ -3,6 +3,9 @@ binary := dyskctl
 .PHONY: build
 build: authors
 	@echo "Building..."
+	$Q cp -Rf cmd vendor/github.com/khenidak/dysk/dyskctl/
+	$Q cp -Rf main.go vendor/github.com/khenidak/dysk/dyskctl/
+	$Q cp -Rf ../pkg/client vendor/github.com/khenidak/dysk/pkg/
 	$Q CGO_ENABLED=0 go build .
 
 .PHONY: clean deps
