@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	 http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Notes:
+#  - Please install "jq" package before using this driver.
+DIR=$(dirname "$(readlink -f "$0")")
+JQ="/usr/bin/jq"
+DYSKCTL=$DIR/dyskctl
+ERRORLOG="/var/log/dysk.err.log"
+
+usage() {
+	err "Invalid usage. Usage: "
+	err "\t$0 init"
+	err "\t$0 mount <mount dir> <json params>"
+	err "\t$0 unmount <mount dir>"
+	exit 1
+}
+
+err() {
+	echo $* 1>&2
+}
+
+log() {
+	echo $* >&1
+}
+
+ismounted() {
+	MOUNT=`findmnt -n ${MNTPATH} 2>/dev/null | cut -d' ' -f1`
+	[ "${MOUNT}" = "${MNTPATH}" ]
+}
+
+mount() {
+	MNTPATH="$1"
+	ACCOUNTNAME=$(echo "$2"|"$JQ" -r '.["kubernetes.io/secret/accountname"] // empty'|base64 -d)
+	ACCOUNTKEY=$(echo "$2"|"$JQ" -r '.["kubernetes.io/secret/accountkey"] // empty'|base64 -d)
+	#READ_MODE=$(echo "$2"|"$JQ" -r '.["kubernetes.io/readwrite"]')
+	SIZE=$(echo "$2"|"$JQ" -r '.size // empty')
+		
+	if ismounted ; then
+		log '{"status": "Success"}'
+		exit 0
+	fi
+
+	echo "begin to mkdir -p ${MNTPATH}" >>$ERRORLOG
+	mkdir -p ${MNTPATH} >>$ERRORLOG 2>&1
+
+	echo "begin to "${DYSKCTL}" mount auto-create -a "${ACCOUNTNAME}" -k ... -n "${SIZE}"" >>$ERRORLOG
+	result=`"$DYSKCTL" mount auto-create -a "${ACCOUNTNAME}" -k "${ACCOUNTKEY}" -n "${SIZE}" -o json 2>"${ERRORLOG}"`
+	diskname=`echo $result | "jq" -r '.Name'`
+	if [ ${#diskname} -lt 5 ]; then
+		errorLog=`cat "${ERRORLOG}"`
+		err '{ "status": "Failure", "message": "Failed to dyskctl mount auto-create, mountPath:'${MNTPATH}', accountname:'${ACCOUNTNAME}', error log:'${errorLog}''
+		exit 1
+	fi
+	
+	#TODO make fileType(ext4) as a parameter
+	echo "begin to mkfs.ext4 /dev/${diskname}" >>$ERRORLOG
+	mkfs.ext4 /dev/$diskname >>$ERRORLOG 2>&1
+	if [ $? -ne 0 ]; then
+		errorLog=`cat "${ERRORLOG}"`
+		err '{ "status": "Failure", "message": "Failed to format device /dev/$'${diskname}', mountPath:'${MNTPATH}', accountname:'${ACCOUNTNAME}', error log:'${errorLog}''
+		exit 1
+	fi
+	
+	echo "begin to /bin/mount /dev/${diskname} "${MNTPATH}"" >>$ERRORLOG
+	/bin/mount /dev/$diskname "${MNTPATH}" >>$ERRORLOG 2>&1
+	if [ $? -ne 0 ]; then
+		errorLog=`cat "${ERRORLOG}"`
+		err '{ "status": "Failure", "message": "Failed to mount device /dev/$'${diskname}' at '${MNTPATH}', accountname:'${ACCOUNTNAME}', error log:'${errorLog}''
+		exit 1
+	fi
+	log '{"status": "Success"}'
+	exit 0
+}
+
+unmount() {
+	MNTPATH="$1"
+
+	if ! ismounted ; then
+		log '{"status": "Success"}'
+		exit 0
+	fi
+	
+	echo "begin to find ${MNTPATH}" >>$ERRORLOG
+	#find device name
+	devname=`findmnt -n -o SOURCE ${MNTPATH}`
+	if [ ${#devname} -lt 5 ]; then
+		log '{"status": "Success"}'
+		exit 0
+	fi
+
+	echo "begin to umount $MNTPATH, devname: $devname" >>$ERRORLOG
+	/bin/umount $MNTPATH >>$ERRORLOG 2>&1
+	if [ $? -ne 0 ]; then
+		errorLog=`cat "${ERRORLOG}"`
+		err '{ "status": "Failed", "message": "Failed to unmount volume at '${MNTPATH}'"}, error log:'${errorLog}''
+		exit 1
+	fi
+	rmdir "${MNTPATH}" >>$ERRORLOG 2>&1
+	
+	diskname=`echo $devname | cut -d '/' -f3`
+	if [ ${#diskname} -lt 5 ]; then
+		err '{ "status": "Failure", "message": "Failed to parse disk name according to devname('${devname}'), returned disk name: '${diskname}, mountPath: '${MNTPATH}'''
+		exit 1
+	fi	
+
+	echo "begin to $DYSKCTL unmount -d $diskname" >>$ERRORLOG
+	$DYSKCTL unmount -d $diskname >>$ERRORLOG 2>&1
+	if [ $? -ne 0 ]; then
+		errorLog=`cat "${ERRORLOG}"`
+		err '{ "status": "Failed", "message": "Failed to dyskctl unmount disk('${diskname}')", error log: '${errorLog}'}, error log:'${errorLog}''
+		exit 1
+	fi	
+	
+	log '{"status": "Success"}'
+	exit 0
+}
+
+op=$1
+
+if [ "$op" = "init" ]; then
+	log '{"status": "Success", "capabilities": {"attach": false}}'
+	exit 0
+fi
+
+if [ $# -lt 2 ]; then
+	usage
+fi
+
+shift
+
+case "$op" in
+	mount)
+		mount $*
+		;;			
+	unmount)
+		unmount $*
+		;;
+	*)
+	usage
+esac
+
+exit 1
+
+
