@@ -17,13 +17,13 @@ var (
 
 	filePath string
 
-	container    string
-	leaseId      string
-	deviceName   string
-	size         uint
-	vhdFlag      bool
-	readOnlyFlag bool
-	autoLeaseFlag bool
+	container      string
+	leaseId        string
+	deviceName     string
+	size           uint
+	vhdFlag        bool
+	readOnlyFlag   bool
+	autoLeaseFlag  bool
 	breakLeaseFlag bool
 
 	autoCreate bool
@@ -95,7 +95,7 @@ dyskctl unmount --deviceName dysk01`,
 		Run: func(cmd *cobra.Command, args []string) {
 			validateOutput()
 			dyskClient := client.CreateClient("", "")
-			err := dyskClient.Unmount(deviceName)
+			err := dyskClient.Unmount(deviceName, breakLeaseFlag)
 			if nil != err {
 				printError(err)
 				os.Exit(1)
@@ -163,6 +163,7 @@ func init() {
 
 	// UNMOUNT //
 	unmountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name")
+	unmountCmd.PersistentFlags().BoolVarP(&breakLeaseFlag, "break-lease", "b", false, "break existing lease on page blob")
 
 	// GET //
 	getCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name")

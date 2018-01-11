@@ -16,6 +16,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/rubiojr/go-vhd/vhd"
 )
+
 const (
 	deviceFile = "/dev/dysk"
 	// IOCTL Command Codes
@@ -29,7 +30,7 @@ const (
 
 type DyskClient interface {
 	Mount(d *Dysk) error
-	Unmount(name string) error
+	Unmount(name string, breakLease bool) error
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error)
@@ -155,15 +156,25 @@ func (c *dyskclient) Mount(d *Dysk) error {
 	return nil
 }
 
-func (c *dyskclient) Unmount(name string) error {
-	if err := isValidDeviceName(name); nil != err {
+func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
+	var d *Dysk
+	var err error
+	if err = isValidDeviceName(name); nil != err {
 		return err
 	}
 
-	if err := c.openDeviceFile(); nil != err {
+	if err = c.openDeviceFile(); nil != err {
 		return err
 	}
 	defer c.closeDeviceFile()
+
+	// if break lease is flagged keep a reference to it
+	if breakleaseflag {
+		d, err = c.get(name)
+		if nil != err {
+			return err
+		}
+	}
 
 	newName := fmt.Sprintf("%s\n\x00", name)
 	buffer := bufferize(newName)
@@ -178,6 +189,13 @@ func (c *dyskclient) Unmount(name string) error {
 		return fmt.Errorf(res.response)
 	}
 
+	if breakleaseflag {
+		if err := breakLease(d); nil != err {
+			fmt.Fprintf(os.Stderr, "Device:%s on %s/$s is unmounted but failed to break lease\n", d.Name, d.AccountName, d.AccountKey)
+		} else {
+			fmt.Fprintf(os.Stderr, "Broke lease while unmounting device:%s on %s:%s\n", d.Name, d.AccountName, d.Path)
+		}
+	}
 	return nil
 }
 
@@ -240,7 +258,6 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 	if 0 < len(d.LeaseId) {
 		err := c.validateLease(d)
 		if nil != err {
-			fmt.Println("lease not valid")
 			pageBlob, err := c.get_pageblob(d)
 			if nil != err {
 				return "", err
@@ -256,7 +273,6 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 			return d.LeaseId, nil
 		}
 	} else {
-		fmt.Println("lease id not provided")
 		if d.AutoLease {
 			pageBlob, err := c.get_pageblob(d)
 			if nil != err {
@@ -271,10 +287,11 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 			}
 		} else {
 			return "", fmt.Errorf("--lease-id is not provided and --auto-lease is set to false.")
-		} 
-		
+		}
+
 	}
 }
+
 // --------------------------------
 // Utility Funcs
 // --------------------------------
@@ -339,7 +356,7 @@ func (c *dyskclient) pre_mount(d *Dysk) error {
 		byteSize -= vhd.VHD_HEADER_SIZE
 	}
 	d.sectorCount = uint64(byteSize / 512)
-	if !d.AutoCreate  {
+	if !d.AutoCreate {
 		leaseId, err := c.LeaseAndValidate(d)
 		if nil != err {
 			return err
@@ -384,12 +401,33 @@ func (c *dyskclient) get(deviceName string) (*Dysk, error) {
 	return d, nil
 }
 
+/*Use dysks own storage account and key to break its lease */
+func breakLease(d *Dysk) error {
+	dyskClient := dyskclient{
+		storageAccountName: d.AccountName,
+		storageAccountKey:  d.AccountKey,
+	}
+
+	if err := dyskClient.ensureBlobService(); nil != err {
+		return err
+	}
+	blobClient := dyskClient.blobClient
+	containerPath := path.Dir(d.Path)
+	containerPath = containerPath[1:]
+	blobContainer := blobClient.GetContainerReference(containerPath)
+	pageBlobName := path.Base(d.Path)
+	pageBlob := blobContainer.GetBlobReference(pageBlobName)
+
+	if _, err := pageBlob.BreakLease(nil); nil != err {
+		return err
+	}
+
+	return nil
+}
 func (c *dyskclient) lease(pageBlob *storage.Blob, breakLeaseFlag bool) (string, error) {
-	fmt.Println("acquiring new lease")
 	leaseId, err := pageBlob.AcquireLease(-1, "", nil)
 	if nil != err {
 		if breakLeaseFlag {
-			fmt.Println("break lease")
 			_, err := pageBlob.BreakLease(nil)
 			if nil != err {
 				return "", err
