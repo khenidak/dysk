@@ -23,4 +23,5 @@ type Dysk struct {
 	SizeGB      int
         AutoLease   bool
         AutoCreate  bool
+	BreakLease  bool
 }

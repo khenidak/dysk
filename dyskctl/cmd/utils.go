@@ -49,6 +49,7 @@ func mount() {
 	d.Vhd = vhdFlag
 	d.AutoCreate = autoCreate
 	d.AutoLease = autoLeaseFlag
+	d.BreakLease = breakLeaseFlag
 
 	err = dyskClient.Mount(&d)
         if nil != err {

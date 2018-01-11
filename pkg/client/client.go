@@ -110,7 +110,7 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
 
 	// lease it
-	leaseId, err := c.lease(pageBlob)
+	leaseId, err := c.lease(pageBlob, false)
 
 	return leaseId, err
 }
@@ -270,7 +270,7 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 				return "", fmt.Errorf("Blob at %s does not exist", d.Path)
 			}
 			fmt.Println("Lease acquiring")
-		        leaseId, err := c.lease(pageBlob)
+		        leaseId, err := c.lease(pageBlob, d.BreakLease)
 			if nil != err {
 				return "", err
 			} else {
@@ -367,14 +367,26 @@ func (c *dyskclient) get(deviceName string) (*Dysk, error) {
 	return d, nil
 }
 
-func (c *dyskclient) lease(pageBlob *storage.Blob) (string, error) {
+func (c *dyskclient) lease(pageBlob *storage.Blob, breakLeaseFlag bool) (string, error) {
         fmt.Println("lease blob")
         leaseId, err := pageBlob.AcquireLease(-1, "", nil)
 	if nil != err {
-		return "", err
+		fmt.Println(err)
+		if breakLeaseFlag {
+			_, err := pageBlob.BreakLease(nil)
+			if nil != err {
+				return "", err
+			}
+			leaseId, err = pageBlob.AcquireLease(-1, "", nil)
+			fmt.Println(leaseId)
+			return leaseId, err
+		} else {
+			return "", err
+		}
+	} else {
+		fmt.Println(leaseId)
+		return leaseId, err
 	}
-	fmt.Println(leaseId)
-	return leaseId, err
 }
 
 func (c *dyskclient) validateLease(d *Dysk) error {
