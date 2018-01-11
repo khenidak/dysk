@@ -6,8 +6,25 @@
 If you don't want to build the module + CLI, you can download the binaries from the [release](https://github.com/khenidak/dysk/releases) - COMING SOON - page.
 
 
-> Module has been tested against 4.10.x and 4.11+ kernel versions
+> Module has been tested against 4.10.x++ kernel versions
 
+#### Using Docker ####
+
+This docker image, downloads and build dysk kernel module based on your kernel versions
+
+1. It has to run using ```--privileged``` because it installs a kernel module
+2. directories ```/usr/src``` and ```/lib/modules``` are needed for module install (and header downloads)
+3. If you want to maintain a local version (to avoid clone then rebuild with every run) mount a host directory at this container ```/tmp```.
+4. The container image by default uses the first stable tag dysk had, you can override this with setting ```DYSK_TAG``` environment variable.  
+
+
+> The image now depends on Ubuntu image, a slimer alpine version is coming soon
+
+```bash
+docker run --rm -it --privileged  -v /usr/src:/usr/src -v /lib/modules:/lib/modules khenidak/dysk-installer:1.0
+```
+
+#### Manually ####
 1. Download kernel header
 
 ```bash
