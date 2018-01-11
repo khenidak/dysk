@@ -12,7 +12,7 @@ wget -q https://raw.githubusercontent.com/khenidak/dysk/master/tools/dysk_shortc
 cd -
 
 #run the install
-dysk_install
+install_dysk
 
 # run the cli via
 dyskctl
