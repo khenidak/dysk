@@ -33,6 +33,7 @@ type DyskClient interface {
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error)
+        LeaseAndValidate(d *Dysk) (string, error)
 }
 
 type moduleResponse struct {
@@ -48,7 +49,6 @@ type dyskclient struct {
 }
 
 func CreateClient(account string, key string) DyskClient {
-        fmt.Println("createclient")
 	c := dyskclient{
 		storageAccountName: account,
 		storageAccountKey:  key,
@@ -67,7 +67,6 @@ func (c *dyskclient) ensureBlobService() error {
 }
 
 func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error) {
-	fmt.Println("create page blob")
         if err := c.ensureBlobService(); nil != err {
 		return "", err
 	}
@@ -111,10 +110,7 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
 
 	// lease it
-	leaseId, err := pageBlob.AcquireLease(-1, "", nil)
-	if nil != err {
-		return "", err
-	}
+	leaseId, err := c.lease(pageBlob)
 
 	return leaseId, err
 }
@@ -139,7 +135,7 @@ func (c *dyskclient) Mount(d *Dysk) error {
 	}
 
 	as_string := dysk2string(d)
-        fmt.Println(as_string)
+        fmt.Println("sys call: %s", as_string)
 	buffer := bufferize(as_string)
 
 	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTLMOUNTDYSK, uintptr(unsafe.Pointer(&buffer[0])))
@@ -242,6 +238,52 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 	return dysks, nil
 }
 
+func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
+	fmt.Println("LeaseAndValidate")
+        if 0 < len(d.LeaseId) {
+                err := c.validateLease(d)
+                if nil != err {
+			fmt.Println("lease not valid")
+			blobClient := c.blobClient
+			containerPath := path.Dir(d.Path)
+			containerPath = containerPath[1:]
+			blobContainer := blobClient.GetContainerReference(containerPath)
+
+			fmt.Println("container")
+			exists, err := blobContainer.Exists()
+			if nil != err {
+				return "", err
+			}
+			if !exists {
+				return "", fmt.Errorf("Container at %s does not exist", d.Path)
+			}
+
+			pageBlobName := path.Base(d.Path)
+			pageBlob := blobContainer.GetBlobReference(pageBlobName)
+
+			fmt.Println("blob")
+			exists, err = pageBlob.Exists()
+			if nil != err {
+				return "", err
+			}
+			if !exists {
+				return "", fmt.Errorf("Blob at %s does not exist", d.Path)
+			}
+			fmt.Println("Lease acquiring")
+		        leaseId, err := c.lease(pageBlob)
+			if nil != err {
+				return "", err
+			} else {
+				return leaseId, nil
+			}
+		} else {
+			fmt.Println("lease is valid")
+			return d.LeaseId, nil
+		}
+        } else {
+		return "", fmt.Errorf("Missing lease id for %s", d.Path)
+	}
+}
 // --------------------------------
 // Utility Funcs
 // --------------------------------
@@ -279,6 +321,15 @@ func (c *dyskclient) pre_mount(d *Dysk) error {
 		byteSize -= vhd.VHD_HEADER_SIZE
 	}
 	d.sectorCount = uint64(byteSize / 512)
+	if d.AutoLease && !d.AutoCreate  {
+		leaseId, err := c.LeaseAndValidate(d)
+		if nil != err {
+			return err
+		} else {
+			d.LeaseId = leaseId
+		}
+	}
+	fmt.Println(d.LeaseId)
 	return c.validateDysk(d)
 }
 
@@ -316,8 +367,17 @@ func (c *dyskclient) get(deviceName string) (*Dysk, error) {
 	return d, nil
 }
 
-func (c *dyskclient) validateLease(d *Dysk) error {
+func (c *dyskclient) lease(pageBlob *storage.Blob) (string, error) {
+        fmt.Println("lease blob")
+        leaseId, err := pageBlob.AcquireLease(-1, "", nil)
+	if nil != err {
+		return "", err
+	}
+	fmt.Println(leaseId)
+	return leaseId, err
+}
 
+func (c *dyskclient) validateLease(d *Dysk) error {
         fmt.Println("validateLease")
 	blobClient := c.blobClient
 	containerPath := path.Dir(d.Path)

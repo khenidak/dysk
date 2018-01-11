@@ -21,4 +21,6 @@ type Dysk struct {
 	Minor       int
 	Vhd         bool
 	SizeGB      int
+        AutoLease   bool
+        AutoCreate  bool
 }
