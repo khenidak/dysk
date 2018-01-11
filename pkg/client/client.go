@@ -123,7 +123,6 @@ func (c *dyskclient) closeDeviceFile() error {
 }
 
 func (c *dyskclient) Mount(d *Dysk) error {
-    fmt.Println("Mount funct")
 	if err := c.openDeviceFile(); nil != err {
 		return err
 	}
@@ -135,7 +134,6 @@ func (c *dyskclient) Mount(d *Dysk) error {
 	}
 
 	as_string := dysk2string(d)
-	fmt.Println("sys call: %s", as_string)
 	buffer := bufferize(as_string)
 
 	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTLMOUNTDYSK, uintptr(unsafe.Pointer(&buffer[0])))
@@ -239,16 +237,14 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 }
 
 func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
-	fmt.Println("LeaseAndValidate")
     if 0 < len(d.LeaseId) {
         err := c.validateLease(d)
         if nil != err {
-			fmt.Println("lease not valid, get pageblob")
+			fmt.Println("lease not valid")
 			pageBlob, err := c.get_pageblob(d)
 			if nil != err {
 				return "", err
 			} else {
-				fmt.Println("Lease acquiring")
 		        leaseId, err := c.lease(pageBlob, d.BreakLease)
 				if nil != err {
 					return "", err
@@ -257,7 +253,6 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 				}
 			}
 		} else {
-			fmt.Println("lease is valid")
 			return d.LeaseId, nil
 		}
     } else {
@@ -267,7 +262,6 @@ func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
 			if nil != err {
 				return "", err
 			} else {
-				fmt.Println("Lease acquiring")
 		        leaseId, err := c.lease(pageBlob, d.BreakLease)
 				if nil != err {
 					return "", err
@@ -353,7 +347,6 @@ func (c *dyskclient) pre_mount(d *Dysk) error {
 			d.LeaseId = leaseId
 		}
 	}
-	fmt.Println(d.LeaseId)
 	return c.validateDysk(d)
 }
 
@@ -392,29 +385,26 @@ func (c *dyskclient) get(deviceName string) (*Dysk, error) {
 }
 
 func (c *dyskclient) lease(pageBlob *storage.Blob, breakLeaseFlag bool) (string, error) {
-        fmt.Println("lease blob")
-        leaseId, err := pageBlob.AcquireLease(-1, "", nil)
+    fmt.Println("acquiring new lease")
+    leaseId, err := pageBlob.AcquireLease(-1, "", nil)
 	if nil != err {
-		fmt.Println(err)
 		if breakLeaseFlag {
+			fmt.Println("break lease")
 			_, err := pageBlob.BreakLease(nil)
 			if nil != err {
 				return "", err
 			}
 			leaseId, err = pageBlob.AcquireLease(-1, "", nil)
-			fmt.Println(leaseId)
 			return leaseId, err
 		} else {
 			return "", err
 		}
 	} else {
-		fmt.Println(leaseId)
 		return leaseId, err
 	}
 }
 
 func (c *dyskclient) validateLease(d *Dysk) error {
-        fmt.Println("validateLease")
 	blobClient := c.blobClient
 	containerPath := path.Dir(d.Path)
 	containerPath = containerPath[1:]
