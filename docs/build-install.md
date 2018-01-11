@@ -1,14 +1,33 @@
 # Build & Install #
 
-## Build ##
+## Shortcut ##
 
-### Dysk Kernel Module ###
+The easiest way to quickly run dysk is to source a shortcut script. The script defines alias for installing 
+dysk via a container. Also a shortcut for running dyskctl (cli) via a container
+
+```bash
+# *ALWAYS READ SCRIPTS BEFORE USING THEM* #
+cd /tmp # keep it clean
+wget -q https://raw.githubusercontent.com/khenidak/dysk/master/tools/dysk_shortcuts.sh && source dysk_shortcuts.sh
+cd -
+
+#run the install
+dysk_install
+
+# run the cli via
+dyskctl
+```
+
+> The below instructions detailed for manual build/install experience or via running containers.
+
+
+## dysk Kernel Module ##
 If you don't want to build the module + CLI, you can download the binaries from the [release](https://github.com/khenidak/dysk/releases) - COMING SOON - page.
 
 
 > Module has been tested against 4.10.x++ kernel versions
 
-#### Using Docker ####
+### Using Docker ###
 
 This docker image, downloads and build dysk kernel module based on your kernel version
 
@@ -29,7 +48,7 @@ docker run --rm \
 	khenidak/dysk-installer:1.0
 ```
 
-#### Manual Build & Install ####
+### Manual Build & Install ###
 1. Download kernel header
 
 ```bash
@@ -52,7 +71,7 @@ make
 
 > You can use ``` make clean ``` to cleanup the build artifacts 
 
-### Install ###
+**Install**
 
 ```bash
 cd module # or download location
@@ -63,9 +82,9 @@ lsmod | grep dysk
 dmesg # Dysk leaves success init log line
 ```
 
-### Dysk CLI ###
+## dysk cli  ##
 
-#### Using Docker ###
+### Using Docker ###
 
 A docker image is the easiest way to use the command line without clone + build (manual steps).
 
@@ -85,7 +104,7 @@ docker run --rm \
 	mount auto-create -a {account-name} -k {account-key}
 ```
 
-#### Manual ####
+### Manual Build ###
 1. Dependencies
 
 ```bash
