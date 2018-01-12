@@ -42,7 +42,7 @@ void  default_w_task_state_clean(w_task *this_task, task_clean_reason clean_reas
 
 int queue_w_task(w_task *parent_task, dysk *d, w_task_exec_fn exec_fn, w_task_state_clean_fn state_clean_fn, task_mode mode, void *state)
 {
-  w_task *w 			= NULL;
+  w_task *w       = NULL;
   dysk_worker *dw = NULL;
   dw = d->worker;
   w = kmem_cache_alloc(dw->tasks_slab, GFP_NOIO);
@@ -50,11 +50,11 @@ int queue_w_task(w_task *parent_task, dysk *d, w_task_exec_fn exec_fn, w_task_st
   if (!w) return -ENOMEM;
 
   memset(w, 0, sizeof(w_task));
-  w->mode 			= mode;
-  w->state 			= state;
-  w->clean_fn 	= (NULL != state_clean_fn) ?  state_clean_fn : &default_w_task_state_clean;
-  w->exec_fn		= exec_fn;
-  w->d 					= d;
+  w->mode       = mode;
+  w->state      = state;
+  w->clean_fn   = (NULL != state_clean_fn) ?  state_clean_fn : &default_w_task_state_clean;
+  w->exec_fn    = exec_fn;
+  w->d          = d;
   w->expires_on = (NULL != parent_task) ? parent_task->expires_on : W_TASK_TIMEOUT;
   // add it to the queue
   spin_lock(&dw->lock);
@@ -75,7 +75,7 @@ static inline void execute(dysk_worker *dw, w_task *w)
 #define max_retry_now_count 3 // Max # of retrying a task that said retry now
   task_result taskresult;
   task_clean_reason clean_reason = clean_done;
-  int execCount 		= 0;
+  int execCount     = 0;
   dysk *d;
   d = w->d;
 

@@ -30,15 +30,15 @@
 #define AZ_SLAB_NAME "dysk_az_reqs"
 
 // Http Response processing
-#define AZ_RESPONSE_OK 				 		206 // As returned from GET
-#define AZ_RESPONSE_CREATED				201 // as returned fro PUT
-#define AZ_RESPONSE_ERR_ACCESS 		403 // Access denied key is invalid or has changed
-#define AZ_RESPONSE_ERR_LEASE			412 // Lease broke
+#define AZ_RESPONSE_OK            206 // As returned from GET
+#define AZ_RESPONSE_CREATED       201 // as returned fro PUT
+#define AZ_RESPONSE_ERR_ACCESS    403 // Access denied key is invalid or has changed
+#define AZ_RESPONSE_ERR_LEASE     412 // Lease broke
 #define AZ_RESPONSE_ERR_NOT_FOUND 404 // Page blob deleted
-#define AZ_RESPONSE_ERR_THROTTLE	503 // We are being throttling
-#define AZ_RESPONSE_ERR_TIME_OUT	500 // Throttle but the server side is misbehaving
-#define AZ_RESPONSE_CONFLICT			429 // Conflict (shouldn't really happen: unless reqing during transnient states)
-#define AZ_RESPONSE_BAD_RANGE			416 // Bad range (disk resized?)
+#define AZ_RESPONSE_ERR_THROTTLE  503 // We are being throttling
+#define AZ_RESPONSE_ERR_TIME_OUT  500 // Throttle but the server side is misbehaving
+#define AZ_RESPONSE_CONFLICT      429 // Conflict (shouldn't really happen: unless reqing during transnient states)
+#define AZ_RESPONSE_BAD_RANGE     416 // Bad range (disk resized?)
 
 #define az_is_catastrophe(azstatuscode) ((azstatuscode == AZ_RESPONSE_ERR_ACCESS || azstatuscode == AZ_RESPONSE_ERR_LEASE || azstatuscode == AZ_RESPONSE_ERR_NOT_FOUND || azstatuscode == AZ_RESPONSE_BAD_RANGE) ? 1 : 0)
 #define az_is_throttle(azstatuscode) ((azstatuscode == AZ_RESPONSE_ERR_THROTTLE || azstatuscode == AZ_RESPONSE_ERR_TIME_OUT || azstatuscode == AZ_RESPONSE_CONFLICT) ? 1 : 0)
@@ -46,10 +46,10 @@
 
 
 // Http request header processing
-#define DATE_LENGTH 			 		 32   // Date buffer
-#define SIGN_STRING_LENGTH  	 1024 // StringToSign (Processed)
-#define AUTH_TOKEN_LENGTH 		 1024 // HMAC(SHA256(StringToSign))
-#define HEADER_LENGTH 				 1024 // Upstream message header, all headers + token
+#define DATE_LENGTH            32   // Date buffer
+#define SIGN_STRING_LENGTH     1024 // StringToSign (Processed)
+#define AUTH_TOKEN_LENGTH      1024 // HMAC(SHA256(StringToSign))
+#define HEADER_LENGTH          1024 // Upstream message header, all headers + token
 #define RESPONSE_HEADER_LENGTH 1024 // Response Header Length // Azure sends on average 592 bytes
 
 // PUT REQUEST HEADER
@@ -81,12 +81,12 @@ static const char *put_request_sign = "PUT\n\n\n%lu\n\n\n\n\n\n\n\n\nx-ms-date:%
 static const char *get_request_sign = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
 
 /*
-	Notes on mem alloc:
-	===================
-	Each request is represented by __reqstate __resstate both handle
-	upstream and downstream data. These objects are allocated on
-	a single slab az_slab with GFP_NOIO. Objects they reference
-	all allocated normally via kmalloc + GFP_KERNEL.
+  Notes on mem alloc:
+  ===================
+  Each request is represented by __reqstate __resstate both handle
+  upstream and downstream data. These objects are allocated on
+  a single slab az_slab with GFP_NOIO. Objects they reference
+  all allocated normally via kmalloc + GFP_KERNEL.
 */
 
 // -----------------------------
@@ -97,9 +97,9 @@ struct crypto_shash *tfm_hmac_sha256 = NULL;
 // for __reqstate __resstate allocation for *all dysks*.
 struct kmem_cache *az_slab;
 
-#define MAX_CONNECTIONS 			64 	 // Max concurrent conenctions
+#define MAX_CONNECTIONS       64   // Max concurrent conenctions
 #define ERR_FAILED_CONNECTION -999 // Used to signal inability to connection to server
-#define MAX_TRY_CONNECT 			3    // Defines the max # of attempt to connect, will signal catastrohpe after
+#define MAX_TRY_CONNECT       3    // Defines the max # of attempt to connect, will signal catastrohpe after
 
 // Reason why the connection is returning to pool
 typedef enum put_connection_reason  put_connection_reason;
@@ -111,8 +111,8 @@ typedef struct connection connection;
 typedef struct az_state az_state;
 
 // Request Mgmt
-typedef struct __reqstate __reqstate; 			// Send state (Task)
-typedef struct __resstate __resstate; 			// receive state (Task)
+typedef struct __reqstate __reqstate;       // Send state (Task)
+typedef struct __resstate __resstate;       // receive state (Task)
 typedef struct http_response http_response; // Response Formatting - This struct does not own ref to external mem.
 
 
@@ -158,13 +158,13 @@ struct az_state {
 // State help request reentrancy
 struct __reqstate {
   // Caller set state //
-  az_state *azstate; 		// module state
-  struct request *req; 	// current request
+  az_state *azstate;    // module state
+  struct request *req;  // current request
 
   // reentrancy state  //
-  connection *c; 		 	 	// connection used for request
-  __resstate *resstate;	// response state
-  int try_new_request;	// flagged when we retry from the top
+  connection *c;        // connection used for request
+  __resstate *resstate; // response state
+  int try_new_request;  // flagged when we retry from the top
 
   // Header message
   struct msghdr *header_msg;
@@ -181,17 +181,17 @@ struct __reqstate {
 
 struct __resstate {
   // Caller set state
-  az_state *azstate; 		// module state
-  struct request *req;	// current request
-  connection *c;				// conenction used in the send part
+  az_state *azstate;    // module state
+  struct request *req;  // current request
+  connection *c;        // conenction used in the send part
 
   // reentrancy state //
-  char *response_buffer; 				// Response buffer, can be potentially large (4megs + 1024)
-  http_response *httpresponse;	// http response translated into meaninful object
-  struct iovec *iov;						// io vector used in the receive message
-  struct msghdr *msg;						// Message used to receive
-  __reqstate *reqstate;					// if we are retrying we will need to issue new request with this
-  int try_new_request;					// flag will be set if connection failed, retryable/throttle request
+  char *response_buffer;        // Response buffer, can be potentially large (4megs + 1024)
+  http_response *httpresponse;  // http response translated into meaninful object
+  struct iovec *iov;            // io vector used in the receive message
+  struct msghdr *msg;           // Message used to receive
+  __reqstate *reqstate;         // if we are retrying we will need to issue new request with this
+  int try_new_request;          // flag will be set if connection failed, retryable/throttle request
 };
 
 struct http_response {
@@ -227,9 +227,9 @@ static inline void connection_teardown(connection *c)
 // Creates a connection
 static inline int connection_create(connection_pool *pool, connection **c)
 {
-  struct socket *sockt	 = NULL;
-  connection *newcon  	 = NULL;
-  int success 					 = -ENOMEM;
+  struct socket *sockt   = NULL;
+  connection *newcon     = NULL;
+  int success            = -ENOMEM;
   int connection_attempt = 1;
   newcon = kmalloc(sizeof(connection), GFP_KERNEL);
 
@@ -258,7 +258,7 @@ static inline int connection_create(connection_pool *pool, connection **c)
   }
 
   newcon->sockt = sockt;
-  *c 						= newcon;
+  *c            = newcon;
   return success;
 failed:
   connection_teardown(newcon);
@@ -290,7 +290,7 @@ void connection_pool_put(connection_pool *pool, connection **c, put_connection_r
 //gets a connection from queue or NULL if all busy
 int connection_pool_get(connection_pool *pool, connection **c)
 {
-  int success 	= -ENOMEM;
+  int success   = -ENOMEM;
 
   if (0 <  connection_pool_count(pool)) { // we have connection in pool
     kfifo_out(&pool->connection_queue, c, sizeof(connection *));
@@ -322,9 +322,9 @@ static inline int connection_pool_init(connection_pool *pool)
   if (!server) goto fail;
 
   memset(server, 0, sizeof(struct sockaddr_in));
-  server->sin_family 			= AF_INET;
+  server->sin_family      = AF_INET;
   server->sin_addr.s_addr = inet_addr(ip);
-  server->sin_port 				= htons(port);
+  server->sin_port        = htons(port);
 
   if (0 != (success = kfifo_alloc(&pool->connection_queue, sizeof(connection *) * MAX_CONNECTIONS, GFP_KERNEL))) {
     printk(KERN_INFO  "Dysk failed to create connection pool with error %d", success);
@@ -382,11 +382,11 @@ static inline int http_response_completed(http_response *res, char *buffer)
 static inline int process_response(char *response, size_t response_length, http_response *res, size_t bytes_received)
 {
   const char *content_length = "Content-Length";
-  int cut 				 = 0;
+  int cut          = 0;
   char buffer[512] = {0};
-  const char *rn 	 = "\r\n";
+  const char *rn   = "\r\n";
   // sscanf limitation for status line process, check below
-  char temp[32] 		 = {0};
+  char temp[32]      = {0};
   char *idx_of_first = NULL;
   int has_content_length = 0;
   size_t scan_for_content_length = 0;
@@ -452,25 +452,25 @@ static inline int process_response(char *response, size_t response_length, http_
 // Makes request header
 int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_len)
 {
-  struct request *req 	= NULL;
-  int dir 							= 0;
+  struct request *req   = NULL;
+  int dir               = 0;
   // Header Processing
-  char *date 						= NULL;
-  char *signstring 			= NULL;
+  char *date            = NULL;
+  char *signstring      = NULL;
   char *authToken       = NULL;
   char *encodedToken    = NULL;
   dysk *d               = NULL;
-  size_t len     				= 0;
-  size_t range_start 		= 0;
+  size_t len            = 0;
+  size_t range_start    = 0;
   size_t range_end      = 0;
-  int success 	        = 0;
+  int success           = 0;
   int res = -ENOMEM;
   req = reqstate->req;
   dir = rq_data_dir(req);
   d = reqstate->azstate->d;
   // Ranges
   range_start = ((u64) blk_rq_pos(req) << 9);
-  range_end 	= (range_start + blk_rq_bytes(req) - 1);
+  range_end   = (range_start + blk_rq_bytes(req) - 1);
   // date
   date = kmalloc(DATE_LENGTH, GFP_KERNEL);
 
@@ -571,7 +571,7 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
   int free_all = 0;
   __resstate *resstate  = (__resstate *) this_task->state;
 
-  if (resstate->c) connection_pool_put(resstate->azstate->pool,	&resstate->c, connection_ok);
+  if (resstate->c) connection_pool_put(resstate->azstate->pool, &resstate->c, connection_ok);
 
   resstate->c = NULL;
 
@@ -609,10 +609,10 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 
   if (resstate->httpresponse) kfree(resstate->httpresponse);
 
-  resstate->iov 						= NULL;
-  resstate->msg 						= NULL;
+  resstate->iov             = NULL;
+  resstate->msg             = NULL;
   resstate->response_buffer = NULL;
-  resstate->httpresponse 		= NULL;
+  resstate->httpresponse    = NULL;
 
   if (1 == free_all) {
     kmem_cache_free(az_slab, resstate);
@@ -623,30 +623,30 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
 // Process Response + Copy buffers as needed
 task_result __receive_az_response(w_task *this_task)
 {
-  __resstate *resstate	= NULL; // receive state
-  struct request *req		= NULL; // ref'ed from state
-  connection *c 				= NULL; // ref'ed from  state
+  __resstate *resstate  = NULL; // receive state
+  struct request *req   = NULL; // ref'ed from state
+  connection *c         = NULL; // ref'ed from  state
   connection_pool *pool = NULL; // ref'ed out of state -- module state
   // Calculated
-  size_t range_start		= 0;
-  size_t range_end 			= 0;
+  size_t range_start    = 0;
+  size_t range_end      = 0;
   size_t response_size  = 0;
-  int success 					= 0;
+  int success           = 0;
   int dir               = 0;
   task_result res = done;
   mm_segment_t oldfs;
   // Extract state
   resstate = (__resstate *) this_task->state;
-  pool 		 = resstate->azstate->pool;
-  req 		 = resstate->req;
-  c				 = resstate->c;
+  pool     = resstate->azstate->pool;
+  req      = resstate->req;
+  c        = resstate->c;
 
   // if we failed to enqueue a request the last timne
   if (1 == resstate->try_new_request) goto retry_new_request;
 
   // Ranges
-  range_start 	= ((u64) blk_rq_pos(req) << 9);
-  range_end 		= range_start + blk_rq_bytes(req) - 1;
+  range_start   = ((u64) blk_rq_pos(req) << 9);
+  range_end     = range_start + blk_rq_bytes(req) - 1;
   response_size = (READ == rq_data_dir(req)) ?  blk_rq_bytes(req) + RESPONSE_HEADER_LENGTH : RESPONSE_HEADER_LENGTH;
 
   // allocate response buffer
@@ -685,11 +685,11 @@ task_result __receive_az_response(w_task *this_task)
     if (!resstate->msg) return retry_later;
 
     memset(resstate->msg, 0, sizeof(struct msghdr));
-    resstate->msg->msg_name			 	= NULL; //pool->server;
-    resstate->msg->msg_namelen 	 	= 0;		//sizeof(pool->server);
-    resstate->msg->msg_control 	 	= NULL;
+    resstate->msg->msg_name       = NULL; //pool->server;
+    resstate->msg->msg_namelen    = 0;    //sizeof(pool->server);
+    resstate->msg->msg_control    = NULL;
     resstate->msg->msg_controllen = 0;
-    resstate->msg->msg_flags			= 0;
+    resstate->msg->msg_flags      = 0;
   }
 
   // iterator
@@ -776,7 +776,7 @@ retry_new_request:
   //set that we are trying with new request
   resstate->try_new_request = 1;
   //create new request
-  resstate->reqstate->req 		= req;
+  resstate->reqstate->req     = req;
   resstate->reqstate->azstate = resstate->azstate;
 
   if (0 != queue_w_task(this_task, this_task->d, &__send_az_req, &__clean_send_az_req, normal, resstate->reqstate))
@@ -795,11 +795,11 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
     if (0 == reqstate->try_new_request) {
       free_all = 1;
     } else {
-      if (reqstate->c) connection_pool_put(reqstate->azstate->pool,	&reqstate->c, connection_ok);
+      if (reqstate->c) connection_pool_put(reqstate->azstate->pool, &reqstate->c, connection_ok);
 
       reqstate->c = NULL;
-      reqstate->header_sent 		= 0;
-      reqstate->body_sent 			= 0;
+      reqstate->header_sent     = 0;
+      reqstate->body_sent       = 0;
       reqstate->try_new_request = 0;
 
       if (reqstate->resstate) {
@@ -813,7 +813,7 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
       reqstate->resstate = NULL;
     }
 
-    if (reqstate->c) connection_pool_put(reqstate->azstate->pool,	&reqstate->c, connection_ok);
+    if (reqstate->c) connection_pool_put(reqstate->azstate->pool, &reqstate->c, connection_ok);
 
     reqstate->c = NULL;
     io_end_request(this_task->d, reqstate->req, (clean_reason == clean_timeout) - EAGAIN ? : -EIO);
@@ -822,7 +822,7 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 
   if (reqstate->header_buffer) kfree(reqstate->header_buffer); // header_buffer
 
-  if (reqstate->body_buffer) kfree(reqstate->body_buffer); 		// body buffer
+  if (reqstate->body_buffer) kfree(reqstate->body_buffer);    // body buffer
 
   // messages and iovs
   if (reqstate->header_iov) kfree(reqstate->header_iov);
@@ -835,10 +835,10 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
 
   reqstate->header_buffer = NULL;
   reqstate->body_buffer   = NULL;
-  reqstate->header_iov 		= NULL;
-  reqstate->body_iov			= NULL;
-  reqstate->header_msg		= NULL;
-  reqstate->body_msg			= NULL;
+  reqstate->header_iov    = NULL;
+  reqstate->body_iov      = NULL;
+  reqstate->header_msg    = NULL;
+  reqstate->body_msg      = NULL;
 
   if (1 == free_all) {
     kmem_cache_free(az_slab, reqstate); // root object
@@ -851,17 +851,17 @@ task_result __send_az_req(w_task *this_task)
 {
   struct request *req   = NULL; // ref'ed out of task state
   connection_pool *pool = NULL; // ref'ed out of task state (xfer  state)
-  __reqstate *reqstate	= NULL; // ref'ed out of task state
-  size_t range_start		= 0;
-  size_t range_end 			= 0;
-  int dir 							= 0;
-  int success 					= 0;
+  __reqstate *reqstate  = NULL; // ref'ed out of task state
+  size_t range_start    = 0;
+  size_t range_end      = 0;
+  int dir               = 0;
+  int success           = 0;
   mm_segment_t oldfs;
   // Extract state - created by created or task
   reqstate = (__reqstate *) this_task->state;
-  pool 		 = reqstate->azstate->pool;
-  req 		 = reqstate->req;
-  dir			 = rq_data_dir(req);
+  pool     = reqstate->azstate->pool;
+  req      = reqstate->req;
+  dir      = rq_data_dir(req);
   // Calculate Ranges
   range_start = ((u64) blk_rq_pos(req) << 9);
   range_end   = (range_start +  blk_rq_bytes(req) - 1);
@@ -910,11 +910,11 @@ task_result __send_az_req(w_task *this_task)
     if (!reqstate->header_msg) return retry_now;
 
     memset(reqstate->header_msg, 0, sizeof(struct msghdr));
-    reqstate->header_msg->msg_control 	 = NULL;
+    reqstate->header_msg->msg_control    = NULL;
     reqstate->header_msg->msg_controllen = 0;
-    reqstate->header_msg->msg_name 			 = pool->server;
-    reqstate->header_msg->msg_namelen 	 = sizeof(struct sockaddr_in);
-    reqstate->header_msg->msg_flags 		 = MSG_DONTWAIT;
+    reqstate->header_msg->msg_name       = pool->server;
+    reqstate->header_msg->msg_namelen    = sizeof(struct sockaddr_in);
+    reqstate->header_msg->msg_flags      = MSG_DONTWAIT;
   }
 
   if (!reqstate->header_iov) {
@@ -981,11 +981,11 @@ task_result __send_az_req(w_task *this_task)
       if (!reqstate->body_msg) return retry_now;
 
       memset(reqstate->body_msg, 0, sizeof(struct msghdr));
-      reqstate->body_msg->msg_control 	  = NULL;
-      reqstate->body_msg->msg_controllen 	= 0;
-      reqstate->body_msg->msg_name 				= pool->server;
-      reqstate->body_msg->msg_namelen 	  = sizeof(struct sockaddr_in);
-      reqstate->body_msg->msg_flags 		  = MSG_DONTWAIT;
+      reqstate->body_msg->msg_control     = NULL;
+      reqstate->body_msg->msg_controllen  = 0;
+      reqstate->body_msg->msg_name        = pool->server;
+      reqstate->body_msg->msg_namelen     = sizeof(struct sockaddr_in);
+      reqstate->body_msg->msg_flags       = MSG_DONTWAIT;
     }
 
     if (!reqstate->body_iov) {
@@ -1027,10 +1027,10 @@ message_sent:
   // Prepare receive state
   // -----------------------------------
   reqstate->resstate->azstate = reqstate->azstate;
-  reqstate->resstate->req 		= reqstate->req;
-  reqstate->resstate->c				= reqstate->c;
+  reqstate->resstate->req     = reqstate->req;
+  reqstate->resstate->c       = reqstate->c;
   // Queue the receive part, fathering it with this task.
-  success = queue_w_task(this_task, this_task->d, &__receive_az_response, __clean_receive_az_response,	no_throttle, reqstate->resstate);
+  success = queue_w_task(this_task, this_task->d, &__receive_az_response, __clean_receive_az_response,  no_throttle, reqstate->resstate);
 
   if (0 != success) return retry_now;
 
@@ -1056,7 +1056,7 @@ int az_do_request(dysk *d, struct request *req)
   if (!reqstate) return -ENOMEM;
 
   memset(reqstate, 0, sizeof(__reqstate));
-  reqstate->req 		= req;
+  reqstate->req     = req;
   reqstate->azstate = (az_state *) d->xfer_state;
   success = queue_w_task(NULL, d, &__send_az_req, __clean_send_az_req, normal, reqstate);
 
@@ -1072,9 +1072,9 @@ int az_do_request(dysk *d, struct request *req)
 // ---------------------------
 int az_init_for_dysk(dysk *d)
 {
-  az_state *azstate 		= NULL;
+  az_state *azstate     = NULL;
   connection_pool *pool = NULL;
-  int success 					= 0;
+  int success           = 0;
   azstate = kmalloc(sizeof(az_state), GFP_KERNEL);
 
   if (!azstate) goto free_all;
@@ -1084,7 +1084,7 @@ int az_init_for_dysk(dysk *d)
   // Decode the key once and keep it
   azstate->decodedKey =  base64_decode(d->def->accountKey, strlen(d->def->accountKey), &azstate->decodedKeyLen);
 
-  if (!azstate->decodedKey)	goto free_all;
+  if (!azstate->decodedKey) goto free_all;
 
   pool = kmalloc(sizeof(connection_pool), GFP_KERNEL);
 

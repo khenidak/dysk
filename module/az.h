@@ -21,6 +21,3 @@ void az_teardown_for_dysk(dysk *d);
 int az_do_request(dysk *d, struct request *req);
 
 #endif
-
-
-

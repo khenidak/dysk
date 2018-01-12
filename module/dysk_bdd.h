@@ -1,7 +1,6 @@
 #ifndef _DYSK_BDD_H
 #define _DYSK_BDD_H
 
-
 #include <linux/types.h>
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
@@ -17,13 +16,13 @@
 #define ACCOUNT_NAME_LEN   256
 #define ACCOUNT_KEY_LEN    128
 #define DEVICE_NAME_LEN    32
-#define BLOB_PATH_LEN			 1024
-#define HOST_LEN					 512
+#define BLOB_PATH_LEN      1024
+#define HOST_LEN           512
 #define IP_LEN             32
-#define LEASE_ID_LEN 			 64
+#define LEASE_ID_LEN       64
 
-#define DYSK_OK 				 0 // Healthy and working
-#define DYSK_DELETING 	 1 // Deleting based on user request
+#define DYSK_OK          0 // Healthy and working
+#define DYSK_DELETING    1 // Deleting based on user request
 #define DYSK_CATASTROPHE 2 // Something is wrong with connection, lease etc.
 
 // Instance of a mounted disk
@@ -119,22 +118,22 @@ void dysk_worker_teardown(dysk_worker *dw);
 
 
 enum task_clean_reason {
-  clean_done 	  				 = 1 << 0, // successful compeletion
-  clean_timeout  				 = 1 << 1, // Task is cleaned because it is a timeout
-  clean_dysk_del				 = 1 << 2, //  Task's dysk is being deleted
+  clean_done             = 1 << 0, // successful compeletion
+  clean_timeout          = 1 << 1, // Task is cleaned because it is a timeout
+  clean_dysk_del         = 1 << 2, //  Task's dysk is being deleted
   clean_dysk_catastrohpe = 1 << 3, // Task's dysk is undergoing a catastrophe
 };
 
 enum task_result {
-  done 					= 1 << 0, // Task executed will be removed from queue
-  retry_now 		= 1 << 1, // Task will be retried immediatly
-  retry_later 	= 1 << 2, // Task will be retried next worker round
+  done          = 1 << 0, // Task executed will be removed from queue
+  retry_now     = 1 << 1, // Task will be retried immediatly
+  retry_later   = 1 << 2, // Task will be retried next worker round
   throttle_dysk = 1 << 3, // dysk attached to this task will be throttled (affects all tasks related this dysk)
-  catastrophe 	= 1 << 4 // dysk failed. dysk failure routine will kick off
+  catastrophe   = 1 << 4 // dysk failed. dysk failure routine will kick off
 };
 enum task_mode {
-  normal			= 1 << 0, // Task will be throttled when dysk is throttled
-  no_throttle	= 1 << 1 // task will not be throttled  when dysk is throttled
+  normal      = 1 << 0, // Task will be throttled when dysk is throttled
+  no_throttle = 1 << 1 // task will not be throttled  when dysk is throttled
 };
 
 // Dysk work

@@ -30,8 +30,8 @@
 
 #define IOCTLMOUNTDYSK   9901
 #define IOCTLUNMOUNTDYSK 9902
-#define IOCTGETDYSK 		 9903
-#define IOCTLISTDYYSKS 	 9904
+#define IOCTGETDYSK      9903
+#define IOCTLISTDYYSKS   9904
 
 
 static int ep_open(struct inode *, struct file *);
@@ -64,7 +64,7 @@ static struct block_device_operations dysk_ops = {
   .release         = dysk_release,
   .revalidate_disk = dysk_revalidate,
   .ioctl           = dysk_ioctl,
-  .getgeo 				 = dysk_getgeo,
+  .getgeo          = dysk_getgeo,
 };
 
 // ---------------------------------
@@ -87,8 +87,8 @@ struct dyskslist {
 // Global State
 // --------------------------
 static int endpoint_major = 0;
-static int count_devices 	= 0;
-static int dysk_major    	= -1;
+static int count_devices  = 0;
+static int dysk_major     = -1;
 
 // mknod
 struct class *class;
@@ -201,7 +201,7 @@ static inline int dysk_del(char *name, char *error)
 static inline int dysk_add(dysk *d, char *error)
 {
   const char *ERR_DYSK_EXISTS = "Failed to mount dysk, device with name:%s already exists";
-  const char *ERR_DYSK_ADD 		= "Failed to mount device:%s with errno:%d";
+  const char *ERR_DYSK_ADD    = "Failed to mount device:%s with errno:%d";
   int success;
 
   // Check Exists
@@ -260,19 +260,19 @@ void dysk_def_to_buffer(dysk_def *dd, char *buffer)
 // Dysk def from buffer -- Endpoint IOCTL
 int dysk_def_from_buffer(char *buffer, size_t len, dysk_def *dd, char *error)
 {
-  const char *ERR_RW 					 = "Can't determine read/write flag";
+  const char *ERR_RW           = "Can't determine read/write flag";
   const char *ERR_DEVICE_NAME  = "Can't determine deviceName";
   const char *ERR_SECTOR_COUNT = "Can't determine sector count";
   const char *ERR_ACCOUNT_NAME = "Can't determine account name";
   const char *ERR_ACCOUNT_KEY =  "Can't determine account key";
-  const char *ERR_PATH				 = "Can't determine path";
-  const char *ERR_HOST 				 = "Can't determine host";
-  const char *ERR_IP 					 = "Can't determine ip";
-  const char *ERR_LEASE_ID		 = "Can't determine lease";
-  const char *ERR_VHD					 = "Can't determine vhd";
+  const char *ERR_PATH         = "Can't determine path";
+  const char *ERR_HOST         = "Can't determine host";
+  const char *ERR_IP           = "Can't determine ip";
+  const char *ERR_LEASE_ID     = "Can't determine lease";
+  const char *ERR_VHD          = "Can't determine vhd";
   char line[LINE_LENGTH] = {0};
-  int cut 			=	0;
-  int idx 			= 0;
+  int cut       = 0;
+  int idx       = 0;
   // Read/Write
   cut = get_until(buffer, n, line, LINE_LENGTH);
 
@@ -286,7 +286,7 @@ int dysk_def_from_buffer(char *buffer, size_t len, dysk_def *dd, char *error)
   if (0 == strncmp(line, RW, strlen(RW)))
     dd->readOnly = 0;
   else
-    dd->readOnly =	1;
+    dd->readOnly =  1;
 
   // Device Name
   cut = get_until(buffer + idx, n, dd->deviceName, DEVICE_NAME_LEN);
@@ -394,7 +394,7 @@ long dysk_mount(struct file *f, char *user_buffer)
   char *buffer = NULL;
   char *out    = NULL;
   dysk_def *dd = NULL;
-  dysk *d			 = NULL;
+  dysk *d      = NULL;
   size_t len   = MAX_IN_OUT;
   long ret     = -ENOMEM;
   int mounted  = 0;
@@ -495,7 +495,7 @@ long dysk_unmount(struct file *f, char *user_buffer)
 {
   char *buffer = NULL;
   char *out    = NULL;
-  dysk *d			 = NULL;
+  dysk *d      = NULL;
   char line[DEVICE_NAME_LEN] = {0};
   size_t len   = MAX_IN_OUT;
   long ret     = -ENOMEM;
@@ -557,7 +557,7 @@ long dysk_get(struct file *f, char *user_buffer)
   const char *ERR_DYSK_GET_DOES_NOT_EXIST =  "Failed to get dysk, device with name:%s does not exists";
   char *buffer = NULL;
   char *out    = NULL;
-  dysk *d			 = NULL;
+  dysk *d      = NULL;
   size_t len   = MAX_IN_OUT;
   long ret     = -ENOMEM;
   char line[DEVICE_NAME_LEN] = {0};
@@ -635,7 +635,7 @@ long dysk_list(struct file *f, char *user_buffer)
   size_t idx = 0;
   size_t len = 0;
   char *out  = NULL;
-  dysk *d		 = NULL;
+  dysk *d    = NULL;
   long ret   = -ENOMEM;
   // allocate buffer out up front
   out = kmalloc(MAX_IN_OUT, GFP_KERNEL);
@@ -764,7 +764,7 @@ int endpoint_start(void)
 static void io_request(struct request_queue *q)
 {
   struct request *req = NULL;
-  dysk *d 						= NULL;
+  dysk *d             = NULL;
   d = (dysk *) q->queuedata;
 
   while (NULL != (req = blk_peek_request(q))) {
@@ -781,10 +781,10 @@ static void io_request(struct request_queue *q)
     // Only xfer reqs
     if(req->cmd_type != REQ_TYPE_FS)
     {
-    	printk(KERN_INFO "NON TRANSFER");
-    	blk_start_request(req);
-    	io_end_request(d,req, -EINVAL);
-    	continue;
+      printk(KERN_INFO "NON TRANSFER");
+      blk_start_request(req);
+      io_end_request(d,req, -EINVAL);
+      continue;
     }
     */
     if (WRITE == rq_data_dir(req) && 1 == d->def->readOnly) {
