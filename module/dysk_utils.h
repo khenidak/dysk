@@ -16,17 +16,17 @@
 
 
 
-inline int utc_RFC1123_date(char* buf, size_t len);
+inline int utc_RFC1123_date(char *buf, size_t len);
 
 //IPv4 as unsigned int
-inline unsigned int inet_addr(char* ip);
+inline unsigned int inet_addr(char *ip);
 
 // Calc a HMAC
-inline int calc_hmac(struct crypto_shash *tfm, unsigned char* digest, const unsigned char* key, unsigned int keylen, const unsigned char* buf, unsigned int buflen);
+inline int calc_hmac(struct crypto_shash *tfm, unsigned char *digest, const unsigned char *key, unsigned int keylen, const unsigned char *buf, unsigned int buflen);
 
 // Base64
-inline unsigned char* base64_encode(const unsigned char *src, size_t len, size_t *out_len);
-unsigned char* base64_decode(const unsigned char *src, size_t len, size_t *out_len);
+inline unsigned char *base64_encode(const unsigned char *src, size_t len, size_t *out_len);
+unsigned char *base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 
 // Finds something, copies everything before it to [to] returns len of copied or -1
 inline int get_until(char *haystack, const char *until, char *to, size_t max);
