@@ -26,6 +26,15 @@ const (
 	IOCTLISTDYYSKS   = 9904
 	// All in/out commands are expecting 2048 buffers.
 	IOCTL_IN_OUT_MAX = 2048
+
+	// length as expected by the module
+	ACCOUNT_NAME_LEN = 256
+	ACCOUNT_KEY_LEN  = 128
+	DEVICE_NAME_LEN  = 32
+	BLOB_PATH_LEN    = 1024
+	HOST_LEN         = 512
+	IP_LEN           = 32
+	LEASE_ID_LEN     = 64
 )
 
 type DyskClient interface {
@@ -458,14 +467,14 @@ func (c *dyskclient) validateLease(d *Dysk) error {
 	return nil
 }
 
-/* TODO: use length constants */
+// set host, ip and static validation
 func (c *dyskclient) validateDysk(d *Dysk) error {
 	if 0 == len(d.Type) || (ReadOnly != d.Type && ReadWrite != d.Type) {
 		return fmt.Errorf("Invalid type. Must be R or RW")
 	}
 
 	// lower the name
-	if 0 == len(d.Name) || 32 < len(d.Name) {
+	if 0 == len(d.Name) || DEVICE_NAME_LEN < len(d.Name) {
 		return fmt.Errorf("Invalid name. Only max of(32) chars")
 	}
 
@@ -477,11 +486,11 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 		return fmt.Errorf("Invalid Sector count.")
 	}
 
-	if 0 == len(d.AccountName) || 256 < len(d.AccountName) {
+	if 0 == len(d.AccountName) || ACCOUNT_NAME_LEN < len(d.AccountName) {
 		return fmt.Errorf("Invalid Account name. Must be <= than 256")
 	}
 
-	if 0 == len(d.AccountKey) || 128 < len(d.AccountKey) {
+	if 0 == len(d.AccountKey) || ACCOUNT_KEY_LEN < len(d.AccountKey) {
 		return fmt.Errorf("Invalid AccountKey. Must be <= 64")
 	}
 
@@ -490,17 +499,17 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 		fmt.Errorf("Invalid account key. Must be a base64 encoded string. Error:%s", err.Error())
 	}
 
-	if 0 == len(d.Path) || 1024 < len(d.Path) {
+	if 0 == len(d.Path) || BLOB_PATH_LEN < len(d.Path) {
 		return fmt.Errorf("Invalid path. Must be <= 1024")
 	}
 
-	if 0 < len(d.host) && 512 < len(d.host) {
+	if 0 < len(d.host) && HOST_LEN < len(d.host) {
 		return fmt.Errorf("Invalid host. Must be <= 512")
 	} else {
 		d.host = fmt.Sprintf("%s.blob.core.windows.net", d.AccountName) // Won't support sovereign clouds for now
 	}
 
-	if 0 == len(d.LeaseId) || 64 < len(d.LeaseId) {
+	if 0 == len(d.LeaseId) || LEASE_ID_LEN < len(d.LeaseId) {
 		return fmt.Errorf("Invalid Lease Id. Must be <= 32")
 	}
 
