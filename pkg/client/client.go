@@ -29,12 +29,12 @@ const (
 )
 
 type DyskClient interface {
-	Mount(d *Dysk) error
+	Mount(d *Dysk, autoLease, breakExistingLease bool) error
 	Unmount(name string, breakLease bool) error
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error)
-	LeaseAndValidate(d *Dysk) (string, error)
+	//LeaseAndValidate(d *Dysk, breakExistingLease bool) (string, error)
 }
 
 type moduleResponse struct {
@@ -45,7 +45,7 @@ type moduleResponse struct {
 type dyskclient struct {
 	storageAccountName string
 	storageAccountKey  string
-	blobClient         storage.BlobStorageClient
+	blobClient         *storage.BlobStorageClient
 	f                  *os.File
 }
 
@@ -58,12 +58,14 @@ func CreateClient(account string, key string) DyskClient {
 }
 
 func (c *dyskclient) ensureBlobService() error {
-	storageClient, err := storage.NewBasicClient(c.storageAccountName, c.storageAccountKey)
-	if err != nil {
-		return err
+	if nil == c.blobClient {
+		storageClient, err := storage.NewBasicClient(c.storageAccountName, c.storageAccountKey)
+		if err != nil {
+			return err
+		}
+		blobClient := storageClient.GetBlobService()
+		c.blobClient = &blobClient
 	}
-	blobClient := storageClient.GetBlobService()
-	c.blobClient = blobClient
 	return nil
 }
 
@@ -111,25 +113,18 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
 
 	// lease it
-	leaseId, err := c.lease(pageBlob, false)
+	leaseId, err := page_blob_lease(pageBlob, false)
 
 	return leaseId, err
 }
 
-func (c *dyskclient) closeDeviceFile() error {
-	if nil == c.f {
-		return fmt.Errorf("Device file is not open")
-	}
-	return c.f.Close()
-}
-
-func (c *dyskclient) Mount(d *Dysk) error {
+func (c *dyskclient) Mount(d *Dysk, autoLease, breakExistingLease bool) error {
 	if err := c.openDeviceFile(); nil != err {
 		return err
 	}
 	defer c.closeDeviceFile()
 
-	err := c.pre_mount(d)
+	err := c.pre_mount(d, autoLease, breakExistingLease)
 	if nil != err {
 		return err
 	}
@@ -254,48 +249,54 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 	return dysks, nil
 }
 
-func (c *dyskclient) LeaseAndValidate(d *Dysk) (string, error) {
-	if 0 < len(d.LeaseId) {
-		err := c.validateLease(d)
-		if nil != err {
-			pageBlob, err := c.get_pageblob(d)
-			if nil != err {
-				return "", err
-			} else {
-				leaseId, err := c.lease(pageBlob, d.BreakLease)
-				if nil != err {
-					return "", err
-				} else {
-					return leaseId, nil
-				}
-			}
-		} else {
-			return d.LeaseId, nil
-		}
-	} else {
-		if d.AutoLease {
-			pageBlob, err := c.get_pageblob(d)
-			if nil != err {
-				return "", err
-			} else {
-				leaseId, err := c.lease(pageBlob, d.BreakLease)
-				if nil != err {
-					return "", err
-				} else {
-					return leaseId, nil
-				}
-			}
-		} else {
-			return "", fmt.Errorf("--lease-id is not provided and --auto-lease is set to false.")
-		}
-
-	}
-}
-
 // --------------------------------
 // Utility Funcs
 // --------------------------------
-func (c *dyskclient) get_pageblob(d *Dysk) (*storage.Blob, error) {
+// internal get, expects device file to be open prior to execute
+func (c *dyskclient) get(deviceName string) (*Dysk, error) {
+	newName := fmt.Sprintf("%s\n\x00", deviceName)
+	buffer := bufferize(newName)
+
+	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTGETDYSK, uintptr(unsafe.Pointer(&buffer[0])))
+	if e != 0 {
+		return nil, e
+	}
+
+	res := parseResponse(buffer)
+	if res.is_error {
+		return nil, fmt.Errorf(res.response)
+	}
+
+	d, err := string2dysk(res.response)
+	if nil != err {
+		return nil, err
+	}
+
+	return d, nil
+}
+
+//opens dysk device file
+func (c *dyskclient) openDeviceFile() error {
+	f, err := os.Open(deviceFile)
+	c.f = f
+	return err
+}
+
+//cloes dysk device file
+func (c *dyskclient) closeDeviceFile() error {
+	if nil == c.f {
+		return fmt.Errorf("Device file is not open")
+	}
+	return c.f.Close()
+}
+
+//gets a page blob for a dysk
+func (c *dyskclient) pageblob_get(d *Dysk) (*storage.Blob, error) {
+	err := c.ensureBlobService()
+	if nil != err {
+		return nil, err
+	}
+
 	blobClient := c.blobClient
 	containerPath := path.Dir(d.Path)
 	containerPath = containerPath[1:]
@@ -322,15 +323,13 @@ func (c *dyskclient) get_pageblob(d *Dysk) (*storage.Blob, error) {
 
 	return pageBlob, nil
 }
-func (c *dyskclient) set_pageblob_size(d *Dysk) error {
-	c.ensureBlobService()
-	blobClient := c.blobClient
-	containerPath := path.Dir(d.Path)
-	containerPath = containerPath[1:]
-	blobContainer := blobClient.GetContainerReference(containerPath)
 
-	pageBlobName := path.Base(d.Path)
-	pageBlob := blobContainer.GetBlobReference(pageBlobName)
+// sets sizeGb on dysk
+func (c *dyskclient) set_pageblob_size(d *Dysk) error {
+	pageBlob, err := c.pageblob_get(d)
+	if nil != err {
+		return err
+	}
 
 	// Read Properties if read && is page blog then we are cool
 	getProps := storage.GetBlobPropertiesOptions{
@@ -345,7 +344,9 @@ func (c *dyskclient) set_pageblob_size(d *Dysk) error {
 	d.SizeGB = int(pageBlob.Properties.ContentLength / (1024 * 1024 * 1024))
 	return nil
 }
-func (c *dyskclient) pre_mount(d *Dysk) error {
+
+//lease + validation
+func (c *dyskclient) pre_mount(d *Dysk, autoLease, breakExistingLease bool) error {
 	d.AccountName = c.storageAccountName
 	d.AccountKey = c.storageAccountKey
 
@@ -356,13 +357,19 @@ func (c *dyskclient) pre_mount(d *Dysk) error {
 		byteSize -= vhd.VHD_HEADER_SIZE
 	}
 	d.sectorCount = uint64(byteSize / 512)
-	if !d.AutoCreate {
-		leaseId, err := c.LeaseAndValidate(d)
+
+	pageBlob, err := c.pageblob_get(d)
+	if nil != err {
+		return err
+	}
+
+	if "" == d.LeaseId && autoLease {
+		lease, err := page_blob_lease(pageBlob, breakExistingLease)
 		if nil != err {
 			return err
-		} else {
-			d.LeaseId = leaseId
 		}
+
+		d.LeaseId = lease
 	}
 	return c.validateDysk(d)
 }
@@ -379,28 +386,6 @@ func (c *dyskclient) post_get(d *Dysk) {
 	d.SizeGB = int(byteSize / (1024 * 1024 * 1024))
 }
 
-func (c *dyskclient) get(deviceName string) (*Dysk, error) {
-	newName := fmt.Sprintf("%s\n\x00", deviceName)
-	buffer := bufferize(newName)
-
-	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTGETDYSK, uintptr(unsafe.Pointer(&buffer[0])))
-	if e != 0 {
-		return nil, e
-	}
-
-	res := parseResponse(buffer)
-	if res.is_error {
-		return nil, fmt.Errorf(res.response)
-	}
-
-	d, err := string2dysk(res.response)
-	if nil != err {
-		return nil, err
-	}
-
-	return d, nil
-}
-
 /*Use dysks own storage account and key to break its lease */
 func breakLease(d *Dysk) error {
 	dyskClient := dyskclient{
@@ -408,27 +393,22 @@ func breakLease(d *Dysk) error {
 		storageAccountKey:  d.AccountKey,
 	}
 
-	if err := dyskClient.ensureBlobService(); nil != err {
+	pageBlob, err := dyskClient.pageblob_get(d)
+	if nil != err {
 		return err
 	}
-	blobClient := dyskClient.blobClient
-	containerPath := path.Dir(d.Path)
-	containerPath = containerPath[1:]
-	blobContainer := blobClient.GetContainerReference(containerPath)
-	pageBlobName := path.Base(d.Path)
-	pageBlob := blobContainer.GetBlobReference(pageBlobName)
-
-	if _, err := pageBlob.BreakLease(nil); nil != err {
+	if _, err := pageBlob.BreakLeaseWithBreakPeriod(0, nil); nil != err {
 		return err
 	}
 
 	return nil
 }
-func (c *dyskclient) lease(pageBlob *storage.Blob, breakLeaseFlag bool) (string, error) {
+
+func page_blob_lease(pageBlob *storage.Blob, breakExistingLease bool) (string, error) {
 	leaseId, err := pageBlob.AcquireLease(-1, "", nil)
 	if nil != err {
-		if breakLeaseFlag {
-			_, err := pageBlob.BreakLease(nil)
+		if breakExistingLease {
+			_, err := pageBlob.BreakLeaseWithBreakPeriod(0, nil)
 			if nil != err {
 				return "", err
 			}
@@ -443,30 +423,10 @@ func (c *dyskclient) lease(pageBlob *storage.Blob, breakLeaseFlag bool) (string,
 }
 
 func (c *dyskclient) validateLease(d *Dysk) error {
-	blobClient := c.blobClient
-	containerPath := path.Dir(d.Path)
-	containerPath = containerPath[1:]
-	blobContainer := blobClient.GetContainerReference(containerPath)
-
-	exists, err := blobContainer.Exists()
+	pageBlob, err := c.pageblob_get(d)
 	if nil != err {
 		return err
 	}
-	if !exists {
-		return fmt.Errorf("Container at %s does not exist", d.Path)
-	}
-
-	pageBlobName := path.Base(d.Path)
-	pageBlob := blobContainer.GetBlobReference(pageBlobName)
-
-	exists, err = pageBlob.Exists()
-	if nil != err {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("Blob at %s does not exist", d.Path)
-	}
-
 	// Read Properties if read && is page blog then we are cool
 	getProps := storage.GetBlobPropertiesOptions{
 		LeaseID: d.LeaseId,
@@ -625,9 +585,4 @@ func bufferize(s string) []byte {
 	b.Write(pad)
 
 	return b.Bytes()
-}
-func (c *dyskclient) openDeviceFile() error {
-	f, err := os.Open(deviceFile)
-	c.f = f
-	return err
 }

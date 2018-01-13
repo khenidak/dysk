@@ -47,11 +47,8 @@ func mount() {
 	d.Path = "/" + container + "/" + pageBlobName
 	d.LeaseId = leaseId
 	d.Vhd = vhdFlag
-	d.AutoCreate = autoCreate
-	d.AutoLease = autoLeaseFlag
-	d.BreakLease = breakLeaseFlag
 
-	err = dyskClient.Mount(&d)
+	err = dyskClient.Mount(&d, autoLeaseFlag, breakLeaseFlag)
 	if nil != err {
 		printError(err)
 		os.Exit(1)
