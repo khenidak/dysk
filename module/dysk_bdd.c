@@ -136,13 +136,12 @@ static inline int find_set_dysk_slots(void)
   unsigned int pos;
   spin_lock(&dysks.lock);
 
-  if(MAX_DYSKS == dysks.count)
+  if (MAX_DYSKS == dysks.count)
     goto done;
 
   dysks.count++;
-  pos = find_first_zero_bit(( unsigned long *) &dysks.dysks_slots, MAX_DYSKS);
+  pos = find_first_zero_bit((unsigned long *) &dysks.dysks_slots, MAX_DYSKS);
   test_and_set_bit(pos, (unsigned long *) &dysks.dysks_slots); // at this point, we are sure that this bit is free
-
   ret = pos;
 done:
   spin_unlock(&dysks.lock);
@@ -916,21 +915,19 @@ int io_hook(dysk *d)
   struct request_queue *rq = NULL;
   int ret = -1;
   int slot = -1;
-
   slot = find_set_dysk_slots();
-  if(-1 == slot){
-    printk(KERN_INFO "failed to mount dysk:%s currently at max(%d)",
-        d->def->deviceName,
-        MAX_DYSKS);
 
+  if (-1 == slot) {
+    printk(KERN_INFO "failed to mount dysk:%s currently at max(%d)",
+           d->def->deviceName,
+           MAX_DYSKS);
     goto clean_no_mem;
   }
 
   d->slot = slot;
-
   rq = blk_init_queue(io_request, &d->lock);
-  if (!rq) goto clean_no_mem;
 
+  if (!rq) goto clean_no_mem;
 
   blk_queue_max_hw_sectors(rq, 2 * 1024 * 4);   /* 4 megs */
   blk_queue_physical_block_size(rq, 512);
@@ -941,8 +938,8 @@ int io_hook(dysk *d)
   blk_queue_max_discard_sectors(rq, 0);
   blk_queue_max_write_same_sectors(rq, 0);
   rq->queuedata = d;
-
   gd = alloc_disk(DYSK_MINORS);
+
   if (!gd) goto clean_no_mem;
 
   gd->private_data = d;
@@ -959,8 +956,10 @@ int io_hook(dysk *d)
   d->def->minor = gd->first_minor;
   // set capacity for this disk
   set_capacity(gd, d->def->sector_count);
+
   // if disk is read only -- all partitions
   if (1 == d->def->readOnly) set_disk_ro(gd, 1);
+
   // add it
   add_disk(gd);
   printk(KERN_INFO "dysk - disk with name %s was created", d->def->deviceName);
@@ -985,11 +984,10 @@ int io_unhook(dysk *d)
   struct gendisk *gd = (struct gendisk *) d->gd;
   struct request_queue *rq = gd->queue;
   free_dysk_slot(d->slot);
-  //del_gendisk(gd);
   blk_cleanup_queue(rq);
   put_disk(gd);
   printk(KERN_INFO "dysk: %s unhooked from i/o", d->def->deviceName);
-  //count_devices--;
+  d->gd = NULL;
   return 0;
 }
 
