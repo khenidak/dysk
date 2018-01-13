@@ -17,10 +17,10 @@
 #include "dysk_bdd.h"
 #include "az.h"
 
-// We are heavily dependant on *newer* blkdev interfaces
-// You shouldn't be using that a kernel version that old anyway
+
+/* avoid building against older kernel */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
-#error Dysk is for 4.10.0++ kernel versions
+#error dysk is for 4.10.0++ kernel versions
 #endif
 
 // ---------------------------------
@@ -67,6 +67,16 @@ static struct block_device_operations dysk_ops = {
   .getgeo          = dysk_getgeo,
 };
 
+// --------------------------------
+// Partitions etc..
+// --------------------------------
+/* cycle through an array of long (sized sa below). Flagging
+ * the slots we use.
+ */
+#define DYSK_MINORS 8                // max partitions per disk
+#define MAX_DYSKS 1024               // max attached dysk per node - if you think we need more file an issue
+#define DYSK_TRACK_SIZE MAX_DYSKS/64 // long array used to track which pos allocated for dysk
+
 // ---------------------------------
 // Dysk Life Cycle Management
 // ---------------------------------
@@ -80,14 +90,22 @@ struct __dyskdelstate {
 
 struct dyskslist {
   spinlock_t lock;
+
+  // # of dysks mounted
+  int count;
+
+  // slots used tracking
+  unsigned int dysks_slots[DYSK_TRACK_SIZE];
+
+  // list of dysks
   dysk head;
 };
+
 
 // --------------------------
 // Global State
 // --------------------------
 static int endpoint_major = 0;
-static int count_devices  = 0;
 static int dysk_major     = -1;
 
 // mknod
@@ -98,10 +116,6 @@ static dyskslist dysks;
 // worker instance used by all dysks
 dysk_worker default_worker;
 
-// Forward
-int io_hook(dysk *d);
-int io_unhook(dysk *d);
-
 // Endpoint contants
 #define MAX_IN_OUT 2048
 #define LINE_LENGTH 32
@@ -111,8 +125,42 @@ const char *dysk_err = "ERR\n";
 const char *n  = "\n";
 const char *RW = "RW";
 
+// Forward
+int io_hook(dysk *d);
+int io_unhook(dysk *d);
+
+// finds and mark slot as busy
+static inline int find_set_dysk_slots(void)
+{
+  int ret = -1;
+  unsigned int pos;
+  spin_lock(&dysks.lock);
+
+  if(MAX_DYSKS == dysks.count)
+    goto done;
+
+  dysks.count++;
+  pos = find_first_zero_bit(( unsigned long *) &dysks.dysks_slots, MAX_DYSKS);
+  test_and_set_bit(pos, (unsigned long *) &dysks.dysks_slots); // at this point, we are sure that this bit is free
+
+  ret = pos;
+done:
+  spin_unlock(&dysks.lock);
+  return ret;
+}
+
+// frees dysk slot
+static inline void free_dysk_slot(unsigned int pos)
+{
+  spin_lock(&dysks.lock);
+  test_and_clear_bit(pos, (unsigned long *) &dysks.dysks_slots);
+  dysks.count --;
+  spin_unlock(&dysks.lock);
+  return;
+}
+
 // Finds a dysk in a list
-static dysk *dysk_exist(char *name)
+static inline dysk *dysk_exist(char *name)
 {
   dysk *existing;
   int found = 0;
@@ -179,6 +227,7 @@ static inline int dysk_del(char *name, char *error)
 
   // set to delete
   d->status = DYSK_DELETING;
+  del_gendisk(d->gd);
   // remove it from list
   spin_lock(&dysks.lock);
   list_del(&d->list);
@@ -213,16 +262,11 @@ static inline int dysk_add(dysk *d, char *error)
   spin_lock_init(&d->lock);
   d->worker        = &default_worker;
 
-  if (0 != (success = az_init_for_dysk(d))) {
-    sprintf(error, ERR_DYSK_ADD, d->def->deviceName, success);
-    return -1;
-  }
-
   // init Dysk
   if (0 != (success = az_init_for_dysk(d))) {
     printk(KERN_ERR "Failed to az_init dysk:%s", d->def->deviceName);
     sprintf(error, ERR_DYSK_ADD, d->def->deviceName, success);
-    az_teardown_for_dysk(d);
+    //az_teardown_for_dysk(d);
     return -1;
   }
 
@@ -435,7 +479,7 @@ long dysk_mount(struct file *f, char *user_buffer)
   // Convert to dd
   if (0 != (ret = dysk_def_from_buffer(buffer, len, dd, out + strlen(dysk_err)))) {
     if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-      printk(KERN_ERR "Dysk failed mount, failed to respond to user with:%s", out);
+      printk(KERN_ERR "dysk failed mount, failed to respond to user with:%s", out);
       ret = -EACCES;
       goto done;
     } else {
@@ -450,7 +494,7 @@ long dysk_mount(struct file *f, char *user_buffer)
   // Add it and hook it up
   if (0 != dysk_add(d, out + strlen(dysk_err))) {
     if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-      printk(KERN_ERR "Dysk failed mount, failed to respond to user with:%s", out);
+      printk(KERN_ERR "dysk failed mount, failed to respond to user with:%s", out);
       ret = -EACCES;
       goto done;
     } else {
@@ -467,7 +511,7 @@ long dysk_mount(struct file *f, char *user_buffer)
   dysk_def_to_buffer(d->def, out + strlen(dysk_ok));
 
   if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-    printk(KERN_ERR "Dysk[%s] mount was ok but failed to respond to user with:%s", d->def->deviceName, out);
+    printk(KERN_ERR "dysk[%s] mount was ok but failed to respond to user with:%s", d->def->deviceName, out);
     ret = -EACCES;
   } else {
     // Failed to convert to dd
@@ -528,7 +572,7 @@ long dysk_unmount(struct file *f, char *user_buffer)
 
   if (0 != dysk_del(line, out + strlen(dysk_err))) {
     if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-      printk(KERN_ERR "Dysk[%s] unmount failed and failed to respond to user with:%s", d->def->deviceName, out);
+      printk(KERN_ERR "dysk[%s] unmount failed and failed to respond to user with:%s", d->def->deviceName, out);
       ret = -EACCES;
     }
   } else {
@@ -536,7 +580,7 @@ long dysk_unmount(struct file *f, char *user_buffer)
     memcpy(out, dysk_ok, strlen(dysk_ok));
 
     if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-      printk(KERN_ERR "Dysk[%s] unmount was ok but failed to respond to user with:%s", d->def->deviceName, out);
+      printk(KERN_ERR "dysk[%s] unmount was ok but failed to respond to user with:%s", d->def->deviceName, out);
       ret = -EACCES;
     }
   }
@@ -593,7 +637,7 @@ long dysk_get(struct file *f, char *user_buffer)
     sprintf(out + strlen(dysk_err), ERR_DYSK_GET_DOES_NOT_EXIST, line);
 
     if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-      printk(KERN_ERR "Dysk failed to get and failed to respond to user with:%s", out);
+      printk(KERN_ERR "dysk failed to get and failed to respond to user with:%s", out);
       ret = -EACCES;
       goto done;
     } else {
@@ -611,7 +655,7 @@ long dysk_get(struct file *f, char *user_buffer)
   //memset(user_buffer,0, len);
 
   if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-    printk(KERN_ERR "Dysk[%s] get was ok but failed to respond to user with:%s", d->def->deviceName, out);
+    printk(KERN_ERR "dysk[%s] get was ok but failed to respond to user with:%s", d->def->deviceName, out);
     ret = -EACCES;
   } else {
     // Failed to convert to dd
@@ -665,7 +709,7 @@ long dysk_list(struct file *f, char *user_buffer)
 
   // Copy to user buffer
   if (0 != copy_to_user(user_buffer, out, strlen(out))) {
-    printk(KERN_ERR "Dysk list was ok but failed to respond to user with:%s", out);
+    printk(KERN_ERR "dysk list was ok but failed to respond to user with:%s", out);
     ret = -EACCES;
     goto done;
   }
@@ -734,7 +778,7 @@ int endpoint_stop(void)
 int endpoint_start(void)
 {
   if (0 >= (endpoint_major = register_chrdev(endpoint_major, EP_DEVICE_NAME, &ep_ops))) {
-    printk(KERN_INFO "bdd - failed to register char device");
+    printk(KERN_INFO "dysk - failed to register char device");
     return -1;
   }
 
@@ -754,7 +798,7 @@ int endpoint_start(void)
     return -1;
   }
 
-  printk(KERN_INFO "bdd - endpoint device registerd with %d major", endpoint_major);
+  printk(KERN_INFO "dysk - endpoint device registerd with %d major", endpoint_major);
   return 0;
 }
 // -------------------------------------------
@@ -771,7 +815,7 @@ static void io_request(struct request_queue *q)
     // If dysk in catastrophe or being deleted
     if (DYSK_OK != d->status) {
       blk_start_request(req);
-      io_end_request(d, req, -EINVAL);
+      io_end_request(d, req, -ENODEV);
       continue;
     }
 
@@ -787,6 +831,8 @@ static void io_request(struct request_queue *q)
       continue;
     }
     */
+    /* by setting the disk to RO at add_disk() time, we no longer need this*/
+    /* TODO: REMOVE */
     if (WRITE == rq_data_dir(req) && 1 == d->def->readOnly) {
       printk(KERN_ERR "dysk %s is readonly, a write request was received", d->def->deviceName);
       blk_start_request(req);
@@ -866,12 +912,25 @@ static int dysk_ioctl(struct block_device *bd, fmode_t mode, unsigned int cmd, u
 // Hooks a dysk to linux io
 int io_hook(dysk *d)
 {
-  struct gendisk *gd = NULL;
+  struct gendisk *gd       = NULL;
   struct request_queue *rq = NULL;
   int ret = -1;
-  rq = blk_init_queue(io_request, &d->lock);
+  int slot = -1;
 
+  slot = find_set_dysk_slots();
+  if(-1 == slot){
+    printk(KERN_INFO "failed to mount dysk:%s currently at max(%d)",
+        d->def->deviceName,
+        MAX_DYSKS);
+
+    goto clean_no_mem;
+  }
+
+  d->slot = slot;
+
+  rq = blk_init_queue(io_request, &d->lock);
   if (!rq) goto clean_no_mem;
+
 
   blk_queue_max_hw_sectors(rq, 2 * 1024 * 4);   /* 4 megs */
   blk_queue_physical_block_size(rq, 512);
@@ -882,28 +941,32 @@ int io_hook(dysk *d)
   blk_queue_max_discard_sectors(rq, 0);
   blk_queue_max_write_same_sectors(rq, 0);
   rq->queuedata = d;
-  gd = alloc_disk(DYSK_MINORS);
 
+  gd = alloc_disk(DYSK_MINORS);
   if (!gd) goto clean_no_mem;
 
-  count_devices++;
   gd->private_data = d;
   gd->queue        = rq;
   gd->major        = dysk_major;
   gd->minors       = DYSK_MINORS;
-  gd->first_minor  = count_devices * DYSK_MINORS;
+  gd->first_minor  = slot * DYSK_MINORS;
   gd->fops         = &dysk_ops;
+  gd->flags        |= GENHD_FL_REMOVABLE;
+  //prep device name.
   memcpy(gd->disk_name, d->def->deviceName, DEVICE_NAME_LEN);
   d->gd = gd;
   d->def->major = dysk_major;
   d->def->minor = gd->first_minor;
-  //  snprintf(d->dev_name, SINGLE_S, "%d:%d", dysk_major, gd->first_minor);
+  // set capacity for this disk
   set_capacity(gd, d->def->sector_count);
+  // if disk is read only -- all partitions
+  if (1 == d->def->readOnly) set_disk_ro(gd, 1);
+  // add it
   add_disk(gd);
   printk(KERN_INFO "dysk - disk with name %s was created", d->def->deviceName);
   return 0;
 clean_no_mem:
-  printk(KERN_INFO "bdd - failed to allocate memory to init dysk:%s", d->def->deviceName);
+  printk(KERN_INFO "dysk - failed to allocate memory to init dysk:%s", d->def->deviceName);
 
   if (gd) {
     del_gendisk(gd);
@@ -921,12 +984,12 @@ int io_unhook(dysk *d)
 {
   struct gendisk *gd = (struct gendisk *) d->gd;
   struct request_queue *rq = gd->queue;
-  del_gendisk(gd);
-  printk(KERN_INFO "detach: %s del_gendisk done", d->def->deviceName);
+  free_dysk_slot(d->slot);
+  //del_gendisk(gd);
   blk_cleanup_queue(rq);
-  printk(KERN_INFO "detach: %s blk_cleanup_queue done", d->def->deviceName);
   put_disk(gd);
-  printk(KERN_INFO "detach: %s put_disk done", d->def->deviceName);
+  printk(KERN_INFO "dysk: %s unhooked from i/o", d->def->deviceName);
+  //count_devices--;
   return 0;
 }
 
@@ -955,16 +1018,14 @@ static int __init _init_module(void)
   spin_lock_init(&dysks.lock);
 
   // Azure transfer library
-  // Az module Init
   if (-1 == az_init()) {
     unload();
     return -1;
   }
 
-  // major for dysk blkdev
   // Register dysk major
   if (0 >= (dysk_major = register_blkdev(0, DYSK_BD_NAME))) {
-    printk(KERN_INFO "Dysk - failed to registerd block device, module is in failed state");
+    printk(KERN_INFO "dysk - failed to registerd block device, module is in failed state");
     unload();
     return -1;
   }
@@ -976,7 +1037,7 @@ static int __init _init_module(void)
   }
 
   if (0 != (success = dysk_worker_init(&default_worker))) {
-    printk(KERN_INFO "Dysk - failed tp init the worker, module is in failed state");
+    printk(KERN_INFO "dysk - failed tp init the worker, module is in failed state");
     unload();
     return success;
   }
@@ -984,14 +1045,15 @@ static int __init _init_module(void)
   // Although the head does not do anywork, we need it
   // during delete dysk routing check dysk_del(..)
   dysks.head.worker = &default_worker;
-  printk(KERN_INFO "Dysk init routine completed successfully");
+  dysks.count = -1;
+  printk(KERN_INFO "dysk init routine completed successfully");
   return 0;
 }
 
 static void __exit _module_teardown(void)
 {
   //az_teardown_for_dysk(d);
-  printk(KERN_INFO "Dysk unloading");
+  printk(KERN_INFO "dysk unloading");
   unload();
 }
 

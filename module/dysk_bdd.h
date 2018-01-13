@@ -10,7 +10,6 @@
 #include <linux/completion.h>
 
 #define KERNEL_SECTOR_SIZE 512
-#define DYSK_MINORS        16
 
 // Lengths
 #define ACCOUNT_NAME_LEN   256
@@ -46,20 +45,28 @@ void dysk_catastrophe(dysk *d);
 struct dysk_def {
   //device name
   char deviceName[DEVICE_NAME_LEN];
+
   // count 512 sectors
   size_t sector_count;
+
   // is readonly device
   int readOnly;
+
   // storage account name
   char accountName[ACCOUNT_NAME_LEN];
+
   // account Key
   char accountKey[ACCOUNT_KEY_LEN];
+
   // page blob path including leading /
   char path[BLOB_PATH_LEN];
+
   // host
   char host[HOST_LEN];
+
   //ip
   char ip[IP_LEN];
+
   // Lease Id
   char lease_id[LEASE_ID_LEN];
   //runtime major/minor
@@ -74,6 +81,9 @@ struct dysk {
   // active/deleting/catastrophe
   unsigned int status;
 
+  // slot used by this dysk in track
+  unsigned int slot;
+
   // dysk throttling
   unsigned long throttle_until;
 
@@ -82,12 +92,16 @@ struct dysk {
 
   // original def used for this dysk
   dysk_def *def;
+
   // gen disk as a result of hooking to io scheduler
   struct gendisk *gd;
+
   // working serving this dysk
   dysk_worker *worker;
+
   // state used by the transfer logic
   void *xfer_state;
+
   // Linked list pluming
   struct list_head list;
 };

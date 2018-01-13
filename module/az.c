@@ -318,7 +318,6 @@ static inline int connection_pool_init(connection_pool *pool)
   struct sockaddr_in *server = NULL;
   // Allocate address for all sockets
   server =  kmalloc(sizeof(struct sockaddr_in), GFP_KERNEL);
-
   if (!server) goto fail;
 
   memset(server, 0, sizeof(struct sockaddr_in));
@@ -327,14 +326,13 @@ static inline int connection_pool_init(connection_pool *pool)
   server->sin_port        = htons(port);
 
   if (0 != (success = kfifo_alloc(&pool->connection_queue, sizeof(connection *) * MAX_CONNECTIONS, GFP_KERNEL))) {
-    printk(KERN_INFO  "Dysk failed to create connection pool with error %d", success);
+    printk(KERN_INFO  "dysk failed to create connection pool with error %d", success);
     goto fail;
   }
 
   pool->server = server;
   return success;
 fail:
-
   if (server) kfree(server);
 
   return success;
@@ -1087,10 +1085,9 @@ int az_init_for_dysk(dysk *d)
   if (!azstate->decodedKey) goto free_all;
 
   pool = kmalloc(sizeof(connection_pool), GFP_KERNEL);
-
   if (!pool) goto free_all;
-
   memset(pool, 0, sizeof(connection_pool));
+
   pool->azstate = azstate;
   azstate->d = d;
 
@@ -1118,7 +1115,6 @@ void az_teardown_for_dysk(dysk *d)
   }
 
   kfree(azstate);
-  printk("DYSK az tear down");
 }
 
 // ---------------------------
