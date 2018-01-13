@@ -413,9 +413,12 @@ func breakLease(d *Dysk) error {
 	return nil
 }
 
+/*TODO: should we allow users to break a *provided* lease
+users can say mount it with this lease but break it and recreate if lease is invalid..
+*/
 func page_blob_lease(pageBlob *storage.Blob, breakExistingLease bool) (string, error) {
 	leaseId, err := pageBlob.AcquireLease(-1, "", nil)
-	if nil != err {
+	if nil != err { /*ding ding ding! if we are here then page blob exists, keys are valid etc etc */
 		if breakExistingLease {
 			_, err := pageBlob.BreakLeaseWithBreakPeriod(0, nil)
 			if nil != err {
