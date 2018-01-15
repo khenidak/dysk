@@ -2,7 +2,7 @@
 set -eo pipefail
 
 dysk_base_dir=${DYSK_BASE_DIR:-"/tmp"}
-dysk_tag=${DYSK_TAG:-"6e14ea59a5404a8eb6e864485005f1b61a207ba0"}
+dysk_tag=${DYSK_TAG:-"1e2f6a1a6f2f241e01ccb4c73653e8a5517eb1f6"}
 dysk_src="${dysk_base_dir}/${dysk_tag}/dysk/"
 
 function clone_dysk()
