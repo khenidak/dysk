@@ -26,7 +26,8 @@ var (
 	autoLeaseFlag  bool
 	breakLeaseFlag bool
 
-	autoCreate bool
+	autoCreate bool // set when sub command autocreate is used
+	mount      bool // set when mount commands are called
 
 	mountCmd = &cobra.Command{
 		Use:   "mount",
@@ -38,7 +39,22 @@ example:
 dyskctl mount --account {acount-name} --key {key} --device-name d01 --container {container-name}`,
 		Run: func(cmd *cobra.Command, args []string) {
 			validateOutput()
-			mount()
+			mount = true
+			mount_create()
+		},
+	}
+	createCmd = &cobra.Command{
+		Use:   "create",
+		Short: "creates a page blob but does not mount it",
+		Long: `creates a page blob but does not mount it.
+example:
+#create 1TB page blob
+dyskctl create --account {acount-name} --key {key} --device-name d01 --container {container-name} --size 1024`,
+		Run: func(cmd *cobra.Command, args []string) {
+			validateOutput()
+			autoCreate = true
+			mount = false
+			mount_create()
 		},
 	}
 
@@ -52,7 +68,9 @@ dyskctl auto-create --account {account-name} --key {key} --size 4`,
 		Run: func(cmd *cobra.Command, args []string) {
 			validateOutput()
 			autoCreate = true
-			mount()
+			autoLeaseFlag = true
+			mount = true
+			mount_create()
 		},
 	}
 
@@ -155,6 +173,16 @@ func init() {
 	mountCmd.PersistentFlags().BoolVarP(&autoLeaseFlag, "auto-lease", "l", true, "create lease if not provided")
 	mountCmd.PersistentFlags().BoolVarP(&breakLeaseFlag, "break-lease", "b", false, "allow breaking of existing lease while creating")
 
+	// CREATE //
+	createCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
+	createCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	createCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
+	createCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
+	createCmd.PersistentFlags().BoolVarP(&vhdFlag, "vhd", "v", true, "writes the vhd footer to the blob page")
+	createCmd.PersistentFlags().BoolVarP(&readOnlyFlag, "read-only", "r", false, "mount dysk as read only")
+	createCmd.PersistentFlags().BoolVarP(&autoLeaseFlag, "auto-lease", "l", false, "lease the new page blob")
+	createCmd.PersistentFlags().UintVarP(&size, "size", "n", 2, "page blob size gb")
+
 	// MOUNT CREATE WE NEED SIZE //
 	mountCreateCmd.PersistentFlags().UintVarP(&size, "size", "n", 2, "page blob size gb")
 
@@ -177,6 +205,7 @@ func init() {
 
 	mountCmd.AddCommand(mountCreateCmd)
 	rootCmd.AddCommand(mountCmd)
+	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(mountFileCmd)
 	rootCmd.AddCommand(unmountCmd)
 	rootCmd.AddCommand(getCmd)

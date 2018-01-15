@@ -10,7 +10,7 @@ import (
 	"github.com/khenidak/dysk/pkg/client"
 )
 
-func mount() {
+func mount_create() {
 	var err error
 	dyskClient := client.CreateClient(storageAccountName, storageAccountKey)
 	pageBlobName := ""
@@ -30,7 +30,7 @@ func mount() {
 	}
 
 	if autoCreate {
-		leaseId, err = dyskClient.CreatePageBlob(size, container, pageBlobName, vhdFlag)
+		leaseId, err = dyskClient.CreatePageBlob(size, container, pageBlobName, vhdFlag, autoLeaseFlag)
 		if nil != err {
 			printError(err)
 			os.Exit(1)
@@ -42,16 +42,20 @@ func mount() {
 	if readOnlyFlag {
 		d.Type = client.ReadOnly
 	}
+	d.AccountName = storageAccountName
+	d.AccountKey = storageAccountKey
 	d.Name = deviceName
 	d.SizeGB = int(size)
 	d.Path = "/" + container + "/" + pageBlobName
 	d.LeaseId = leaseId
 	d.Vhd = vhdFlag
 
-	err = dyskClient.Mount(&d, autoLeaseFlag, breakLeaseFlag)
-	if nil != err {
-		printError(err)
-		os.Exit(1)
+	if mount {
+		err = dyskClient.Mount(&d, autoLeaseFlag, breakLeaseFlag)
+		if nil != err {
+			printError(err)
+			os.Exit(1)
+		}
 	}
 	printDysk(&d)
 }

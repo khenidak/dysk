@@ -42,7 +42,7 @@ type DyskClient interface {
 	Unmount(name string, breakLease bool) error
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
-	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error)
+	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool, lease bool) (string, error)
 	//LeaseAndValidate(d *Dysk, breakExistingLease bool) (string, error)
 }
 
@@ -78,7 +78,7 @@ func (c *dyskclient) ensureBlobService() error {
 	return nil
 }
 
-func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool) (string, error) {
+func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool, lease bool) (string, error) {
 	if err := c.ensureBlobService(); nil != err {
 		return "", err
 	}
@@ -121,10 +121,12 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 
 	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
 
-	// lease it
-	leaseId, err := page_blob_lease(pageBlob, false)
-
-	return leaseId, err
+	if lease {
+		leaseId, err := page_blob_lease(pageBlob, false)
+		return leaseId, err
+	} else {
+		return "", err
+	}
 }
 
 func (c *dyskclient) Mount(d *Dysk, autoLease, breakExistingLease bool) error {
