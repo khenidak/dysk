@@ -1,13 +1,13 @@
-# Dysk #
+# dysk #
 
-Attach Azure disks in < 1 second. Attach as many as you want. Attach them whereever you want. Dysk mounts Azure disks as Linux block devices directly on VMs without dependency on the host.
+Attach Azure disks in < 1 second. Attach as many as you want. Attach them where ever you want. dysk mounts Azure disks as Linux block devices directly on VMs without dependency on the host.
 
 **Project Status**: Alpha
 
 ## Motivation ##
 
 1. Pack more data disks per VM. Dysk has no restriction on max # of disks. Dysk can mount many disks per node (depending on CPU/Memory/Network).
-2. Quickly *attach* and *detach* disks to node (or node's workload). Dysk attaches/detaches disks in 1 second or less.
+2. Quickly *attach* and *detach* disks to node (or node's workload). dysk attaches/detaches disks in 1 second or less.
 3. Treat Azure disks (in essence they are storage client) as workload (similar to pods in kubernetes). They start fast on nodes and move fast between nodes when needed.
 
 ## How it looks like ##
@@ -63,7 +63,7 @@ Dysks are block devices, so it can be used using common Linux commands
 #List block devices
 lsblk
 
-# dysks can be formatted as regular disks using mkfs command example:
+# dysks can be formatted as regular disks using mkfs command, example:
 sudo mkfs.ext4 /dev/dysk6Hjr5R52 #Device name from the output above.
 ```
 
@@ -111,6 +111,4 @@ sudo dyskctl unmount -d dysk6Hjr5R52
 ```
 
 > for further CLI commands execute ```dyskctl --help ```
-
-
 

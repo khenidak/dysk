@@ -45,11 +45,11 @@ docker run --rm \
 	--privileged \
 	-v /usr/src:/usr/src \
 	-v /lib/modules:/lib/modules \
-	khenidak/dysk-installer:1.0
+	khenidak/dysk-installer:0.2
 ```
 
 ### Manual Build & Install ###
-1. Download kernel header
+1. Download kernel headers
 
 ```bash
 # Debian
@@ -74,8 +74,12 @@ make
 **Install**
 
 ```bash
+#manual
 cd module # or download location
 sudo insmod dysk.ko
+
+#or (on repo root)
+make install-module
 
 # to check that module loaded successfully 
 lsmod | grep dysk
@@ -89,18 +93,18 @@ dmesg # Dysk leaves success init log line
 A docker image is the easiest way to use the command line without clone + build (manual steps).
 
 ```bash
-# run listing 
+# run: list all dysks mounted on local box
 docker run --rm \
 	-it --privileged \
 	-v /etc/ssl/certs:/etc/ssl/certs:ro \
-	khenidak/dysk-cli:0.0.1 \ 
+	khenidak/dysk-cli:0.1 \ 
 	list
 
 # run a mount using auto create
 docker run --rm \
 	-it --privileged \
 	-v /etc/ssl/certs:/etc/ssl/certs:ro \
-	khenidak/dysk-cli:0.0.1 \ 
+	khenidak/dysk-cli:0.1 \ 
 	mount auto-create -a {account-name} -k {account-key}
 ```
 
@@ -126,6 +130,9 @@ go install ./...
 ```bash
 cd ./dyskctl  # $GOPATH/src/github.com/khenidak/dysk/dyskctl
 make deps && make build
+
+#or on repo root
+make build-cli
 ```
 
 ## Uninstall ##
