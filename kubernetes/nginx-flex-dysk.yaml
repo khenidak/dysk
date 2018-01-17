@@ -16,4 +16,5 @@ spec:
       secretRef:
         name: dyskcreds
       options:
-        size: "5"
+        accountName: "{Account-Name-Here}"
+        pageBlobPath: "/blob-container/blob-page.vhd"
