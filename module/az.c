@@ -347,7 +347,7 @@ static inline void connection_pool_teardown(connection_pool *pool)
   while (0 < connection_pool_count(pool)) {
     kfifo_out(&pool->connection_queue, &c, sizeof(connection *));
     connection_teardown(c);
-    kfree(c);
+    //kfree(c);
     c = NULL;
   }
 
@@ -595,7 +595,7 @@ void __clean_receive_az_response(w_task *this_task, task_clean_reason clean_reas
       resstate->reqstate = NULL;
     }
 
-    io_end_request(this_task->d, resstate->req, (clean_reason == clean_timeout) - EAGAIN ? : -EIO);
+    io_end_request(this_task->d, resstate->req, (clean_reason == clean_timeout) ? -EAGAIN  : -EIO);
     free_all = 1;
   }
 
@@ -814,7 +814,7 @@ void __clean_send_az_req(w_task *this_task, task_clean_reason clean_reason)
     if (reqstate->c) connection_pool_put(reqstate->azstate->pool, &reqstate->c, connection_ok);
 
     reqstate->c = NULL;
-    io_end_request(this_task->d, reqstate->req, (clean_reason == clean_timeout) - EAGAIN ? : -EIO);
+    io_end_request(this_task->d, reqstate->req, (clean_reason == clean_timeout) ? -EAGAIN  : -EIO);
     free_all = 1;
   }
 
@@ -1072,7 +1072,7 @@ int az_init_for_dysk(dysk *d)
 {
   az_state *azstate     = NULL;
   connection_pool *pool = NULL;
-  int success           = 0;
+  int success           = -1;
   azstate = kmalloc(sizeof(az_state), GFP_KERNEL);
 
   if (!azstate) goto free_all;
