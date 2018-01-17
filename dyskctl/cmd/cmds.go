@@ -17,6 +17,7 @@ var (
 
 	filePath string
 
+	pageBlobName   string
 	container      string
 	leaseId        string
 	deviceName     string
@@ -165,6 +166,7 @@ func init() {
 	// MOUNT //
 	mountCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
 	mountCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	mountCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name")
 	mountCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
 	mountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
 	mountCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "lease id of an existing blob")
@@ -176,6 +178,7 @@ func init() {
 	// CREATE //
 	createCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
 	createCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	createCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name(if empty a random name will be used)")
 	createCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
 	createCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
 	createCmd.PersistentFlags().BoolVarP(&vhdFlag, "vhd", "v", true, "writes the vhd footer to the blob page")

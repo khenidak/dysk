@@ -13,16 +13,9 @@ import (
 func mount_create() {
 	var err error
 	dyskClient := client.CreateClient(storageAccountName, storageAccountKey)
-	pageBlobName := ""
 
 	if "" == deviceName {
 		deviceName = getRandomDyskName()
-	}
-
-	pageBlobName = deviceName
-
-	if vhdFlag {
-		pageBlobName += ".vhd"
 	}
 
 	if 0 == size {
@@ -30,9 +23,22 @@ func mount_create() {
 	}
 
 	if autoCreate {
+		if "" == pageBlobName {
+			pageBlobName = deviceName
+		}
+
+		if vhdFlag && pageBlobName[len(pageBlobName)-4:] != ".vhd" {
+			pageBlobName += ".vhd"
+		}
+
 		leaseId, err = dyskClient.CreatePageBlob(size, container, pageBlobName, vhdFlag, autoLeaseFlag)
 		if nil != err {
 			printError(err)
+			os.Exit(1)
+		}
+	} else {
+		if "" == pageBlobName {
+			printError(fmt.Errorf("Mounting existing page blob requires a page blob name"))
 			os.Exit(1)
 		}
 	}

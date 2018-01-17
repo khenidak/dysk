@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -474,6 +475,9 @@ func (c *dyskclient) validateLease(d *Dysk) error {
 
 // set host, ip and static validation
 func (c *dyskclient) validateDysk(d *Dysk) error {
+
+	var isValidDeviceName = regexp.MustCompile(`^[a-zA-Z]+[a-zA-Z0-9]*$`).MatchString
+
 	if 0 == len(d.Type) || (ReadOnly != d.Type && ReadWrite != d.Type) {
 		return fmt.Errorf("Invalid type. Must be R or RW")
 	}
@@ -483,8 +487,8 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 		return fmt.Errorf("Invalid name. Only max of(32) chars")
 	}
 
-	if strings.Contains(d.Name, "/") || strings.Contains(d.Name, "\\") || strings.Contains(d.Name, ".") {
-		return fmt.Errorf("Invalid name. Must not contain \\ / .")
+	if !isValidDeviceName(d.Name) {
+		return fmt.Errorf("Invalid device name. alpha+numbers allowed. must start with alpha")
 	}
 
 	if 0 == d.sectorCount {
