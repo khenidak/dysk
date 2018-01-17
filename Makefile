@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 MKFILE_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 DYSK_CLI_TAG ?= khenidak/dysk-cli:0.1
@@ -7,6 +8,7 @@ MODULE_DIR = "$(MKFILE_DIR)/module"
 CLI_DIR = "$(MKFILE_DIR)/dyskctl"
 TOOLS_CLI = "$(MKFILE_DIR)/tools/dysk-cli"
 TOOLS_DYSK_INSTALLER = "$(MKFILE_DIR)/tools/dysk-installer"
+VERIFICATION_SCRIPT="$(MKFILE_DIR)/tools/verification/verify.sh"
 
 .PHONY: help build-module clean-module build-cli clean-cli push-cli-image
 ## Self help
@@ -15,6 +17,16 @@ help:
 
 build-module: ## builds kernel module
 	$(MAKE) -C $(MODULE_DIR) all
+
+install-module: | build-module ## installs kernel module
+	@if [[ "" !=  "1`lsmod | egrep dysk`"  ]]; then \
+		echo "module already installed"; \
+	else \
+		sudo insmod "$(MKFILE_DIR)/module/dysk.ko"; \
+	fi
+
+verify:
+	@$(VERIFICATION_SCRIPT)
 
 clean-module: ## cleans kernel module
 	$(MAKE) -C $(MODULE_DIR) clean
