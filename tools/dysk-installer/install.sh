@@ -76,7 +76,7 @@ function install_dysk_module()
 		echo "INF: dysk found on this machine"
 	fi
 
-	modinfo dysk
+	//modinfo dysk
 }
 
 function main()
