@@ -1,10 +1,10 @@
-#dysk Verification#
+# dysk Verification #
 
-##Configuration##
+## Configuration ##
 
 Modify ./settings.json file by adding your storage account name and key
 
-##Running the verification##
+## Running the verification ##
 
 ```
 ./verify.sh
