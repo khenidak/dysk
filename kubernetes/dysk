@@ -1,156 +1,244 @@
 #!/bin/bash
 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#	 http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+set -eo pipefail
 
 # Notes:
 #  - Please install "jq" package before using this driver.
+
+# leases are kept in etcd as config maps and linked to volumes by labels.
+# [read-only] mounting:
+# - if a lease found in etcd use it. if lease is bad /*TODO:!*/
+# -- if not, loop [for x seconds]
+# --- if not create (no breaking of existing lease), then save it in etcd.
+# --- if lease failed (an existing one exists).
+# --- check etcd, if lease found use it.
+# --- if loop failed break lease create new one. /*TODO: Shall we? */
+# [read-write] mounting:
+# - break lease * the assumption is we might be in a split brain cluster *
+# - create new lease, save it in etcd.
+# - use it
+# -- ** this means that if other ro mounts exists, then will break and restart ** --
+# unmounting
+# -- we break lease and attempt to delete the linked lease in etcd.
+
+
+# *** ReadWriteOnce handles that the disk is not mounted rw on multiple nodes ***
+
 DIR=$(dirname "$(readlink -f "$0")")
 JQ="/usr/bin/jq"
-DYSKCTL=$DIR/dyskctl
 ERRORLOG="/var/log/dysk.err.log"
+rm -f ${ERRORLOG}
 
+# if kubelet running in a container (such the case of aks/acs-engine clsuters) we need to execute
+# the bin directly. And since it has no access to anything other vol, we keep the dyskctl with 
+# the flex vol driver
+dyskctl="/etc/kubernetes/volumeplugins/dysk~dysk/dyskctl"
 usage() {
-	err "Invalid usage. Usage: "
-	err "\t$0 init"
-	err "\t$0 mount <mount dir> <json params>"
-	err "\t$0 unmount <mount dir>"
-	exit 1
+  err "Invalid usage. Usage: "
+  err "\t$0 init"
+  err "\t$0 mount <mount dir> <json params>"
+  err "\t$0 unmount <mount dir>"
+  exit 1
 }
 
 err() {
-	echo $* 1>&2
+  echo $* 1>&2
 }
 
 log() {
-	echo $* >&1
+  echo $* >&1
 }
 
 ismounted() {
-	MOUNT=`findmnt -n ${MNTPATH} 2>/dev/null | cut -d' ' -f1`
-	[ "${MOUNT}" = "${MNTPATH}" ]
+  MOUNT=`findmnt -n ${MNTPATH} 2>/dev/null | cut -d' ' -f1`
+  [ "${MOUNT}" = "${MNTPATH}" ]
 }
 
 mount() {
-	MNTPATH="$1"
-	ACCOUNTNAME=$(echo "$2"|"$JQ" -r '.["kubernetes.io/secret/accountname"] // empty'|base64 -d)
-	ACCOUNTKEY=$(echo "$2"|"$JQ" -r '.["kubernetes.io/secret/accountkey"] // empty'|base64 -d)
-	#READ_MODE=$(echo "$2"|"$JQ" -r '.["kubernetes.io/readwrite"]')
-	SIZE=$(echo "$2"|"$JQ" -r '.size // empty')
-		
-	if ismounted ; then
-		log '{"status": "Success"}'
-		exit 0
-	fi
+  MNTPATH="$1"
+  shift 1 
 
-	echo "begin to mkdir -p ${MNTPATH}" >>$ERRORLOG
-	mkdir -p ${MNTPATH} >>$ERRORLOG 2>&1
+  local ACCOUNTNAME=""
+  local ACCOUNTKEY="" 
+  local READWRITE_MODE=""
+  local FS_TYPE=""
+                          
+  local PAGE_BLOB_PATH=""
+  local VOL_ACCOUNT_NAME=""
 
-	echo "begin to "${DYSKCTL}" mount auto-create -a "${ACCOUNTNAME}" -k ... -n "${SIZE}"" >>$ERRORLOG
-	result=`"$DYSKCTL" mount auto-create -a "${ACCOUNTNAME}" -k "${ACCOUNTKEY}" -n "${SIZE}" -o json 2>"${ERRORLOG}"`
-	diskname=`echo $result | "jq" -r '.Name'`
-	if [ ${#diskname} -lt 5 ]; then
-		errorLog=`cat "${ERRORLOG}"`
-		err '{ "status": "Failure", "message": "Failed to dyskctl mount auto-create, mountPath:'${MNTPATH}', accountname:'${ACCOUNTNAME}', error log:'${errorLog}''
-		exit 1
-	fi
-	
-	#TODO make fileType(ext4) as a parameter
-	echo "begin to mkfs.ext4 /dev/${diskname}" >>$ERRORLOG
-	mkfs.ext4 /dev/$diskname >>$ERRORLOG 2>&1
-	if [ $? -ne 0 ]; then
-		errorLog=`cat "${ERRORLOG}"`
-		err '{ "status": "Failure", "message": "Failed to format device /dev/$'${diskname}', mountPath:'${MNTPATH}', accountname:'${ACCOUNTNAME}', error log:'${errorLog}''
-		exit 1
-	fi
-	
-	echo "begin to /bin/mount /dev/${diskname} "${MNTPATH}"" >>$ERRORLOG
-	/bin/mount /dev/$diskname "${MNTPATH}" >>$ERRORLOG 2>&1
-	if [ $? -ne 0 ]; then
-		errorLog=`cat "${ERRORLOG}"`
-		err '{ "status": "Failure", "message": "Failed to mount device /dev/$'${diskname}' at '${MNTPATH}', accountname:'${ACCOUNTNAME}', error log:'${errorLog}''
-		exit 1
-	fi
-	log '{"status": "Success"}'
-	exit 0
+  ACCOUNTNAME="$(echo  "$@" |"$JQ" -r '.["kubernetes.io/secret/accountname"] // empty' | base64 -d)"
+  ACCOUNTKEY="$(echo "$@" | "$JQ" -r '.["kubernetes.io/secret/accountkey"] // empty' | tr -d '\n' | tr -d ' ' | base64 -d)"
+  READWRITE_MODE="$(echo  "$@" | "$JQ" -r '.["kubernetes.io/readwrite"] //empty')"
+  FS_TYPE="$(echo  "$@" |  "$JQ" -r '.["kubernetes.io/fsType"] //empty')"
+
+  PAGE_BLOB_PATH="$(echo "$@" | "$JQ" -r '.pageBlobPath //empty')"
+  VOL_ACCOUNT_NAME="$(echo "$@" | "$JQ" -r '.accountName //empty')"
+
+  ## ------------------------------
+  ## Beging validation + defaulting
+  ## ------------------------------
+  if [[ -z "${PAGE_BLOB_PATH}" ]]; then
+    echo "ERR: pageBlobPath:"${PAGE_BLOB_PATH}" is empty expected /container/pageblobname" >> $ERRORLOG
+    errorLog=`cat "${ERRORLOG}"`
+    err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:${errorLog}\"}"
+    exit 1
+  fi
+
+  if [[ -z "${VOL_ACCOUNT_NAME}" || "${ACCOUNTNAME}" != "${VOL_ACCOUNT_NAME}" ]]; then
+    echo "ERR: volume is referencing the wrong account name Vol:${VOL_ACCOUNT_NAME} Secret:${ACCOUNTNAME}" >> $ERRORLOG
+    errorLog=`cat "${ERRORLOG}"`
+    err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:${errorLog}\"}"
+    exit 1
+  fi
+
+  if ismounted ; then
+    local devname=`findmnt -n -o SOURCE ${MNTPATH}`
+    echo "INF: Mountpoint: ${MNTPATH} has $devname already mounted" >> $ERRORLOG
+    errorLog=`cat "${ERRORLOG}"` 
+    log "{\"status\": \"Success\" , \"message\" :  \"log:${errorLog}\"}"
+    exit 0
+  fi
+  exit
+  local blob_container_name="$(dirname "${PAGE_BLOB_PATH}")"
+  local blob_page_name="$(basename "${PAGE_BLOB_PATH}")"
+
+  # validate
+  if [[ -z "${blob_container_name}" || -z "${blob_page_name}" ]]; then
+    echo "ERR: Coud not extract either blob container name or page blob name from ${PAGE_BLOB_PATH}" >> $ERRORLOG
+    errorLog=`cat "${ERRORLOG}"`
+    err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:${errorLog}\"}"
+    exit 1
+  fi
+
+  # remove first /
+  if [[ ${blob_container_name:0:1} == "/" ]] ; then
+     blob_container_name="${blob_container_name:1}"
+  fi
+
+  # set fs to ext4 if not provided by user
+  if [[ -z "${FS_TYPE}" ]]; then
+    echo "INF:fstype was empty and will set it to ext4" >>$ERRORLOG
+    FS_TYPE="ext4"
+  fi
+
+  local read_only=""
+  if [[ "ro" == "${READWRITE_MODE}" ]]; then
+    read_only="--read-only"
+  fi
+
+  echo "EXEC: mkdir -p ${MNTPATH}" >> $ERRORLOG
+  mkdir -p ${MNTPATH} >>$ERRORLOG 2>&1
+
+  local command_execute="${dyskctl}  mount -a "${ACCOUNTNAME}" -k "${ACCOUNTKEY}" --container-name ${blob_container_name} --pageblob-name ${blob_page_name} --auto-lease --break-lease ${read_only}"
+  echo "INF: dysk mount command - ${command_execute} " >> $ERRORLOG
+
+  local result=$(eval "${command_execute} -o json 2>${ERRORLOG}")
+  local diskname="dyskSqUCTLEA"
+  diskname=`echo "$result" | "$JQ" -r '.Name //empty'`
+  if [[ ${#diskname} -lt 5 ]]; then
+    errorLog=`cat "${ERRORLOG}"`
+    err "{\"status\": \"Failure\", \"message\": \"Failed to dyskctl mount auto-create, mountPath:${MNTPATH}, accountname:${ACCOUNTNAME}, error log:${errorLog}\" }"
+    exit 1
+  fi
+
+  #formatting
+  VOLFSTYPE=$(blkid -o udev ${diskname} 2>/dev/null | grep "ID_FS_TYPE" | cut -d"=" -f2 || echo -n "")
+  if [[ -z "${VOLFSTYPE}" ]]; then
+   echo "INF: disk:${diskname} is not formatted and will be formatted to ${FS_TYPE}" >> $ERRORLOG
+   mkfs -t ${FS_TYPE} /dev/${diskname} >/dev/null 2>&1
+   if [[ "$?" != "0" ]]; then
+     err "{ \"status\": \"Failure\", \"message\": \"Failed to create fs ${FSTYPE} on device ${diskname}\"}"
+     exit 1
+   fi
+  else
+    echo "INF: disk:${diskname} has fstype:${VOLFSTYPE} and will not be formatted" >> $ERRORLOG
+  fi
+
+  #mounting
+  echo "EXEC: /bin/mount /dev/${diskname} "${MNTPATH}"" >>$ERRORLOG
+  /bin/mount /dev/$diskname "${MNTPATH}" >>$ERRORLOG 2>&1
+  if [[ "$?" != "0" ]]; then
+    errorLog=`cat "${ERRORLOG}"`
+    err "{ \"status\": \"Failure\", \"message\": \"Failed to mount device /dev/${diskname} at ${MNTPATH}, accountname:${ACCOUNTNAME}, error log:${errorLog}\"}"
+    exit 1
+  fi
+
+  errorLog=`cat "${ERRORLOG}"`
+  log "{\"status\": \"Success\" , \"message\" :  \"log:${errorLog}\" }"
+  exit 0
 }
 
 unmount() {
-	MNTPATH="$1"
+  MNTPATH="$1"
 
-	if ! ismounted ; then
-		log '{"status": "Success"}'
-		exit 0
-	fi
-	
-	echo "begin to find ${MNTPATH}" >>$ERRORLOG
-	#find device name
-	devname=`findmnt -n -o SOURCE ${MNTPATH}`
-	if [ ${#devname} -lt 5 ]; then
-		log '{"status": "Success"}'
-		exit 0
-	fi
+  if ! ismounted ; then
+    log '{"status": "Success"}'
+    exit 0
+  fi
 
-	echo "begin to umount $MNTPATH, devname: $devname" >>$ERRORLOG
-	/bin/umount $MNTPATH >>$ERRORLOG 2>&1
-	if [ $? -ne 0 ]; then
-		errorLog=`cat "${ERRORLOG}"`
-		err '{ "status": "Failed", "message": "Failed to unmount volume at '${MNTPATH}'"}, error log:'${errorLog}''
-		exit 1
-	fi
-	rmdir "${MNTPATH}" >>$ERRORLOG 2>&1
-	
-	diskname=`echo $devname | cut -d '/' -f3`
-	if [ ${#diskname} -lt 5 ]; then
-		err '{ "status": "Failure", "message": "Failed to parse disk name according to devname('${devname}'), returned disk name: '${diskname}, mountPath: '${MNTPATH}'''
-		exit 1
-	fi	
+  #find device name
+  local devname=`findmnt -n -o SOURCE ${MNTPATH}`
+  if [ ${#devname} -lt 5 ]; then
+    echo "INF: mount path:${MNTPATH} has no mounts" >> $ERRORLOG
+    log '{"status": "Success"}'
+    exit 0
+  fi
 
-	echo "begin to $DYSKCTL unmount -d $diskname" >>$ERRORLOG
-	$DYSKCTL unmount -d $diskname >>$ERRORLOG 2>&1
-	if [ $? -ne 0 ]; then
-		errorLog=`cat "${ERRORLOG}"`
-		err '{ "status": "Failed", "message": "Failed to dyskctl unmount disk('${diskname}')", error log: '${errorLog}'}, error log:'${errorLog}''
-		exit 1
-	fi	
-	
-	log '{"status": "Success"}'
-	exit 0
+  echo "EXEC: umount $MNTPATH, devname: $devname" >>$ERRORLOG
+  /bin/umount $MNTPATH >> $ERRORLOG 2>&1
+  if [[ "$?" != "0" ]]; then
+    errorLog=`cat "${ERRORLOG}"`
+    err '{ "status": "Failed", "message": "Failed to unmount volume at '${MNTPATH}'"}, error log:'${errorLog}''
+    exit 1
+  fi
+
+  echo "EXEC: rmdir ${MNTPATH}" >> $ERRORLOG
+  rmdir "${MNTPATH}" >> $ERRORLOG 2>&1
+
+  local diskname=`echo $devname | cut -d '/' -f3`
+  #if [ ${#diskname} -lt 5 ]; then
+  #  err '{ "status": "Failure", "message": "Failed to parse disk name according to devname('${devname}'), returned disk name: '${diskname}, mountPath: '${MNTPATH}'''
+  #  exit 1
+  #fi
+
+  echo "EXEC:dyskctl unmount -d $diskname" >>$ERRORLOG
+  ${dyskctl} unmount -d $diskname >>$ERRORLOG 2>&1
+  if [ $? -ne 0 ]; then
+    errorLog=`cat "${ERRORLOG}"`
+    err "{ \"status\": \"Failed\", \"message\": \"Failed to dyskctl unmount disk(${diskname}) error log: ${errorLog}\"}"
+    exit 1
+  fi
+
+  log '{"status": "Success"}'
+  exit 0
 }
+
+## ---------------
+## main
+## ---------------
 
 op=$1
 
 if [ "$op" = "init" ]; then
-	log '{"status": "Success", "capabilities": {"attach": false}}'
-	exit 0
+  log '{"status": "Success", "capabilities": {"attach": false}}'
+  exit 0
 fi
 
 if [ $# -lt 2 ]; then
-	usage
+  usage
 fi
 
 shift
 
 case "$op" in
-	mount)
-		mount $*
-		;;			
-	unmount)
-		unmount $*
-		;;
-	*)
-	usage
+  mount)
+    mount $*
+    ;;
+  unmount)
+    unmount $*
+    ;;
+  *)
+  usage
 esac
 
 exit 1
-
-

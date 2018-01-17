@@ -1,6 +1,6 @@
 MKFILE_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-DYSK_CLI_TAG ?= khenidak/dysk-cli:1.0
+DYSK_CLI_TAG ?= khenidak/dysk-cli:0.1
 DYSK_INSTALLER_TAG ?= khenidak/dysk-installer:0.1
 
 MODULE_DIR = "$(MKFILE_DIR)/module"
@@ -9,6 +9,9 @@ TOOLS_CLI = "$(MKFILE_DIR)/tools/dysk-cli"
 TOOLS_DYSK_INSTALLER = "$(MKFILE_DIR)/tools/dysk-installer"
 
 .PHONY: help build-module clean-module build-cli clean-cli push-cli-image
+## Self help
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 build-module: ## builds kernel module
 	$(MAKE) -C $(MODULE_DIR) all
@@ -23,7 +26,7 @@ clean-cli: ## clean dysk cli
 	$(MAKE) -C $(CLI_DIR) clean
 
 push-cli-image: | build-cli ## build + push dysk cli docker image
-	@[ -f "$(TOOLS_CLI)/dyskctl" ] && rm $(TOOLS_CLI)/dyskctl
+	@rm -f $(TOOLS_CLI)/dyskctl
 	@cp $(CLI_DIR)/dyskctl $(TOOLS_CLI)/dyskctl
 	@docker build --tag $(DYSK_CLI_TAG) $(TOOLS_CLI)
 	# TODO: Check before push for existing image..
@@ -35,6 +38,4 @@ push-dysk-installer-image: ## build + push kernel module installer docker iamge
 	@docker build --tag $(DYSK_INSTALLER_TAG) $(TOOLS_DYSK_INSTALLER)
 	@docker push $(DYSK_INSTALLER_TAG)
 
-## Self help
-help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
