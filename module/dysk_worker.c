@@ -29,7 +29,7 @@ all tasks are expected to be none-blocking mode.
 */
 
 #define W_TASK_TIMEOUT jiffies + (30 * HZ)
-#define DYSK_THROTTLE_DEFAULT jiffies + (2 * HZ)
+#define DYSK_THROTTLE_DEFAULT jiffies + (HZ /10)
 #define WORKER_SLAB_NAME "dysk_worker_tasks"
 // Default clean up function for state, we use kfree
 void  default_w_task_state_clean(w_task *this_task, task_clean_reason clean_reason)

@@ -97,7 +97,7 @@ struct crypto_shash *tfm_hmac_sha256 = NULL;
 // for __reqstate __resstate allocation for *all dysks*.
 struct kmem_cache *az_slab;
 
-#define MAX_CONNECTIONS       64   // Max concurrent conenctions
+#define MAX_CONNECTIONS       256  // Max concurrent conenctions
 #define ERR_FAILED_CONNECTION -999 // Used to signal inability to connection to server
 #define MAX_TRY_CONNECT       3    // Defines the max # of attempt to connect, will signal catastrohpe after
 
