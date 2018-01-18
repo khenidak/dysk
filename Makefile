@@ -25,8 +25,11 @@ install-module: | build-module ## installs kernel module
 		sudo insmod "$(MKFILE_DIR)/module/dysk.ko"; \
 	fi
 
-verify:
-	@$(VERIFICATION_SCRIPT)
+verify: ## runs verification tests
+	@$(VERIFICATION_SCRIPT) "VERIFY"
+
+verify-perf: ## runs perf tests
+	@$(VERIFICATION_SCRIPT) "PERF"
 
 clean-module: ## cleans kernel module
 	$(MAKE) -C $(MODULE_DIR) clean
