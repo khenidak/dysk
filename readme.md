@@ -1,4 +1,4 @@
-# dysk #
+# dysk (dīsk) #
 
 Attach Azure disks in < 1 second. Attach as many as you want. Attach them where ever you want. dysk mounts Azure disks as Linux block devices directly on VMs without dependency on the host.
 
