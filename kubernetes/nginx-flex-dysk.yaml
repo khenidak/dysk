@@ -16,5 +16,8 @@ spec:
       secretRef:
         name: dyskcreds
       options:
-        accountName: "{Account-Name-Here}"
-        pageBlobPath: "/blob-container/blob-page.vhd"
+        accountName: "account-name"
+        container: "blob-container-name"
+        blob: "blob-page.vhd"
+        leaseID: "316ef3f8-255f-4958-b9dd-a8de90c2d40a"
+        readwrite: "rw"
