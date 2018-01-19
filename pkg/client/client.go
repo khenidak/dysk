@@ -475,9 +475,8 @@ func (c *dyskclient) validateLease(d *Dysk) error {
 
 // set host, ip and static validation
 func (c *dyskclient) validateDysk(d *Dysk) error {
-
 	var isValidDeviceName = regexp.MustCompile(`^[a-zA-Z]+[a-zA-Z0-9]*$`).MatchString
-
+	var count_forward_slash = regexp.MustCompile(`/`)
 	if 0 == len(d.Type) || (ReadOnly != d.Type && ReadWrite != d.Type) {
 		return fmt.Errorf("Invalid type. Must be R or RW")
 	}
@@ -510,6 +509,11 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 
 	if 0 == len(d.Path) || BLOB_PATH_LEN < len(d.Path) {
 		return fmt.Errorf("Invalid path. Must be <= 1024")
+	}
+
+	count_slashes := count_forward_slash.FindAllStringIndex(d.Path, -1)
+	if 2 != len(count_slashes) {
+		return fmt.Errorf("too many forward slashes in dysk path")
 	}
 
 	if 0 < len(d.host) && HOST_LEN < len(d.host) {
