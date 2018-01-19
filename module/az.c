@@ -97,7 +97,7 @@ struct crypto_shash *tfm_hmac_sha256 = NULL;
 // for __reqstate __resstate allocation for *all dysks*.
 struct kmem_cache *az_slab;
 
-#define MAX_CONNECTIONS       256  // Max concurrent conenctions
+#define MAX_CONNECTIONS       64  // Max concurrent conenctions
 #define ERR_FAILED_CONNECTION -999 // Used to signal inability to connection to server
 #define MAX_TRY_CONNECT       3    // Defines the max # of attempt to connect, will signal catastrohpe after
 
@@ -737,7 +737,7 @@ task_result __receive_az_response(w_task *this_task)
     if (1 == az_is_throttle(resstate->httpresponse->status_code)) goto retry_throttle;
 
     if (1 != az_is_done(resstate->httpresponse->status_code)) {
-      printk(KERN_ERR "** Dysk az module got an expected status code %d and will go into catastrophe mode for [%s]", resstate->httpresponse->status_code, this_task->d->def->deviceName);
+      printk(KERN_ERR "** Dysk az module got an expected status code %d and will go into catastrophe mode for [%s] - response is:%s", resstate->httpresponse->status_code, this_task->d->def->deviceName, resstate->httpresponse->body);
       return catastrophe;
     }
 
