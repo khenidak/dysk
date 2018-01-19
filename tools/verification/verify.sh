@@ -75,12 +75,13 @@ function run_tests()
 
 #verify tests
 add_test "Simple add/remove" "v_simple_add_remove.sh" "VERIFY"
+add_test "mount read only" "v_mount_ro.sh" "VERIFY"
 add_test "Add, format, remove, add another" "v_add_format_remove_add.sh" "VERIFY"
 add_test "add remove 128 dysks" "v_add_remove_128dysks.sh" "VERIFY"
 add_test "Add/Format/Remove 10 dysks" "v_add_format_remove_10dysks.sh" "VERIFY"
 
 #perf tests
-add_test "Basic perf tests" "p_basic_io.sh" "PERF"
+#add_test "Basic perf tests" "p_basic_io.sh" "PERF"
 
 
 # START HERE
