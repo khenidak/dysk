@@ -4,7 +4,7 @@ set -eo pipefail
 dysk_base_dir=${DYSK_BASE_DIR:-"/tmp"}
 dysk_tag=${DYSK_TAG:-"53184b8aa105a0f8a5c828c2178c900be6a66ee0"}
 dysk_src="${dysk_base_dir}/${dysk_tag}/dysk/"
-
+install_mode="${INSTALL_MODE:-"STANDALONE"}"
 function clone_dysk()
 {
 	if [[ ! -d  "${dysk_src}" ]]; then
@@ -84,6 +84,12 @@ function install_dysk_module()
 function main()
 {
 	install_dysk_module	
+  if [[ "STANDALONE" !=  "${install_mode}" ]]; then
+    #https://github.com/kubernetes/kubernetes/issues/17182
+    # if we are running on kubernetes cluster as a daemon set we should
+    # not exit otherwise, container will restart and goes into crashloop (even if exit code is 0)
+    while true; do echo "install done, daemonset sleeping" && sleep 300; done
+  fi
 }
 
 #start here..
