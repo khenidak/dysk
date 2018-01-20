@@ -44,6 +44,7 @@ type DyskClient interface {
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool, lease bool) (string, error)
+	DeletePageBlob(container string, pageBlobName string, leaseId string, breakExistingLease bool) error
 	//LeaseAndValidate(d *Dysk, breakExistingLease bool) (string, error)
 }
 
@@ -77,6 +78,28 @@ func (c *dyskclient) ensureBlobService() error {
 		c.blobClient = &blobClient
 	}
 	return nil
+}
+func (c *dyskclient) DeletePageBlob(container string, pageBlobName string, leaseId string, breakExistingLease bool) error {
+
+	if err := c.ensureBlobService(); nil != err {
+		return err
+	}
+
+	blobContainer := c.blobClient.GetContainerReference(container)
+	pageBlob := blobContainer.GetBlobReference(pageBlobName)
+	if !breakExistingLease {
+		var opts *storage.DeleteBlobOptions
+		if 0 < len(leaseId) {
+			opts = &storage.DeleteBlobOptions{
+				LeaseID: leaseId,
+			}
+		}
+		return pageBlob.Delete(opts)
+	} else {
+		// in case of breaking lease we really don't care about the return of break lease
+		_, _ = pageBlob.BreakLeaseWithBreakPeriod(0, nil)
+		return pageBlob.Delete(nil)
+	}
 }
 
 func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool, lease bool) (string, error) {

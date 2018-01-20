@@ -58,6 +58,26 @@ dyskctl create --account {acount-name} --key {key} --device-name d01 --container
 			mount_create()
 		},
 	}
+	deleteCmd = &cobra.Command{
+		Use:   "delete",
+		Short: "deletes a page blob from azure storage",
+		Long: `deletes a page blob from azure storage, if the pageblob is mounted it will go into catastrophe mode.
+example:
+#Delete if not leased
+dyskctl delete --account {acount-name} --key {key} --pageblob-name {pageblobname} --container {container-name}
+#Delete (if leased, lease will be broken first)
+dyskctl delete --account {acount-name} --key {key} --pageblob-name {pageblobname} --container {container-name} --break-lease
+#Delete with lease
+dyskctl delete --account {acount-name} --key {key} --pageblob-name {pageblobname} --container {container-name} --lease-id
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			dyskClient := client.CreateClient(storageAccountName, storageAccountKey)
+			if err := dyskClient.DeletePageBlob(container, pageBlobName, leaseId, breakLeaseFlag); nil != err {
+				printError(err)
+				os.Exit(1)
+			}
+		},
+	}
 
 	mountCreateCmd = &cobra.Command{
 		Use:   "auto-create",
@@ -186,6 +206,14 @@ func init() {
 	createCmd.PersistentFlags().BoolVarP(&autoLeaseFlag, "auto-lease", "l", false, "lease the new page blob")
 	createCmd.PersistentFlags().UintVarP(&size, "size", "n", 2, "page blob size gb")
 
+	// DELETE //
+	deleteCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
+	deleteCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	deleteCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name")
+	deleteCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
+	deleteCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "dysk is already leased, use this lease while deleting")
+	deleteCmd.PersistentFlags().BoolVarP(&breakLeaseFlag, "break-lease", "b", false, "force delete even page blob is leased")
+
 	// MOUNT CREATE WE NEED SIZE //
 	mountCreateCmd.PersistentFlags().UintVarP(&size, "size", "n", 2, "page blob size gb")
 
@@ -209,6 +237,7 @@ func init() {
 	mountCmd.AddCommand(mountCreateCmd)
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(createCmd)
+	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(mountFileCmd)
 	rootCmd.AddCommand(unmountCmd)
 	rootCmd.AddCommand(getCmd)
