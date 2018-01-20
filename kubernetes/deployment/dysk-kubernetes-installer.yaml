@@ -17,8 +17,29 @@ spec:
         value: "true"
         effect: NoSchedule
       containers:
+        #this image installs the flex vol driver and its deps
+        # mount your flex vols directory to this container 
+        # and set TARGET_DIR env var. 
+        # * for acs-engine 0.12 and later the directory is /etc/kubernetes/volumeplugins
+        # * for acs-engine <0.12 you will need to set vol directory follow https://github.com/khenidak/dysk/tree/master/kubernetes for details
+        # * if you have used flex before on your cluster, use same directory
+        # set TARGET_DIR env var and mount the same directory to to the container
+      - name: flexvol-driver-installer
+        image: "khenidak/dysk-flexvol-installer:0.3"
+        env:
+        #forces the container not to exit 
+        # to solve for this https://github.com/kubernetes/kubernetes/issues/17182
+        # until it is fixed
+        - name: TARGET_DIR
+          value: "/etc/kubernetes/volumeplugins"
+        volumeMounts:
+        - mountPath: "/etc/kubernetes/volumeplugins"
+          name: volplugins
+        # this image installs kernel module according to 
+        # to the kernel loaded on host. currently it downloads
+        # the entire github repo, as we move to beta code will 
+        # be part of the image
       - name: kernel-module-installer
-        imagePullPolicy: Always
         image: "khenidak/dysk-installer:0.4"
         env:
         #forces the container not to exit 
@@ -49,5 +70,8 @@ spec:
       - hostPath:
           path: "/lib/modules"
         name: modules
+      - hostPath:
+          path: "/etc/kubernetes/volumeplugins" #Modify this directory if your nodes are using a different one
+        name: volplugins
       nodeSelector:
         beta.kubernetes.io/os: linux

@@ -1,50 +1,69 @@
-# Kubernetes volume driver for Dysk
-## 1. create a secret which stores dysk account name and password
+# Kubernetes volume driver for dysk
+
+> The flex vol at head is a basic implementation, COMING SOON a full blown implementation
+
+## Install
+
+### For cluters created with acs-engine 0.12 or later 
+
+> These cluster configured for volume plugins at /etc/kubernetes/volumeplugins on every node
+
+Just run:
+```
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/deployment/dysk-system-ns.yaml # creates namespace
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/deployment/dysk-kubernetes-installer.yaml # creates kernel module installer + flex vol install
+```
+### For clusters that has been previously configured for flex vol plugin
+
+1. Modify Volumes/Volumes Mounts ```flexvol-driver-installer``` container in ```dysk-kubernetes-installer.yaml``` to point to the directory that has your current flex volume plugin.
+2. Modify TARGET_DIR env var on ```flexvol-driver-installer``` container in ```dysk-kubernetes-installer.yaml``` to point to the directory that has your current flex volume plugins.
+3. Run the commands above.
+
+### For clusters that has not been configured  flex volume plugins
+
+> kubelet on these cluster is **not** running with ```--volume-plugin-dir``` argument.
+
+1. On each node, perform the following
+```
+# find the unit file for  kubelet
+kubelet_uf_path="$(udo systemctl show -p FragmentPath kubelet)"
+echo "kubelet unit file is at ${kubelet_uf_path}"
+
+#edit the file
+sudo vi ${kubelet_uf_path}
+
+# Edit kubelet arguments by adding --volume-plugin-dir
+#example:  <kubelet executable> <args..>    --volume-plugin-dir=/etc/kubernetes/volumeplugins
+
+# if you are running containerized kubelet add the above path as volume
+#example <docker run> <-v args >  --volume=/etc/kubernetes/volumeplugins:/etc/kubernetes/volumeplugins:rw <..other args ..>
+
+# reload systemd and restart kuebelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+```
+
+2. Run the commands above
+
+## Basic Usage
+
+1. create a secret which stores storage  account name and key (dysk uses Azure storage page blobs)
+
 ```
 kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="foo/dysk"
 ```
 
-## 2. install flexvolume driver on every linux agent node
-Please make sure dysk driver is already installed on every linux agent node
-```
-sudo mkdir -p /etc/kubernetes/volumeplugins/foo~dysk
-cd /etc/kubernetes/volumeplugins/foo~dysk
-sudo wget https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk
-sudo chmod a+x dysk
-
-wget https://raw.githubusercontent.com/andyzhangx/Demo/master/linux/flexvolume/dysk/4.11.0-1016-azure/dyskctl
-chmod a+x dyskctl
-# test dysk driver is installed
-sudo ./dyskctl list
-```
-#### Note:
-Make sure `jq` package is installed on every node: 
-```
-sudo apt install jq -y
-```
-
-## 3. specify `volume-plugin-dir` in kubelet service config (skip this step from acs-engine v0.12.0)
-```
-sudo vi /etc/systemd/system/kubelet.service
-  --volume=/etc/kubernetes/volumeplugins:/etc/kubernetes/volumeplugins:rw \
-        --volume-plugin-dir=/etc/kubernetes/volumeplugins \
-sudo systemctl daemon-reload
-sudo systemctl restart kubelet
-```
-Note:
-`/etc/kubernetes/volumeplugins` has already been the default flexvolume plugin directory in acs-engine (starting from v0.12.0)
-
-## 4. create a pod with flexvolume-dysk mount on linux
+2. create a pod with flexvolume-dysk mount on linux
 kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk.yaml
 
-#### watch the status of pod until its Status changed from `Pending` to `Running`
+3. watch the status of pod until its Status changed from `Pending` to `Running`
 ```watch kubectl describe po nginx-flex-dysk```
 
-## 5. enter the pod container to do validation
+4. enter the pod container to do validation
 ```kubectl exec -it nginx-flex-dysk -- bash```
 
 ```
-azureuser@k8s-master-77890142-0:~$ kubectl exec -it nginx-flex-dysk -- bash
+kubectl exec -it nginx-flex-dysk -- bash
 root@nginx-flex-dysk:/# df -h
 Filesystem         Size  Used Avail Use% Mounted on
 overlay            291G  3.9G  287G   2% /
@@ -57,7 +76,7 @@ tmpfs              3.4G   12K  3.4G   1% /run/secrets/kubernetes.io/serviceaccou
 ```
 
 
-### Links
+## More info on FlexVol drivers
 [Flexvolume doc](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md)
 
 More clear steps about flexvolume by Redhat doc: [Persistent Storage Using FlexVolume Plug-ins](https://docs.openshift.org/latest/install_config/persistent_storage/persistent_storage_flex_volume.html)
