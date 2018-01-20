@@ -46,11 +46,13 @@ function dysk_bin_ok()
 	# Source there?
 	if [[ ! -d  "${dysk_src}" ]]; then
 		echo -n "0"
+    return
 	fi
 
 	# built before?
 	if [[ ! -f "${dysk_src}/module/dysk.ko" ]];then 
 		echo -n "0"
+    return
 	fi
 
 	cd "${dysk_src}/module/"
@@ -66,7 +68,7 @@ function install_dysk_module()
 	#if installed
 	if [[ "" == "$(lsmod | grep dysk)" ]]; then
 		# if bin ok
-		if [[ "0" != "$(dysk_bin_ok)" ]];then
+		if [[ "0" == "$(dysk_bin_ok)" ]];then
 			build_dysk
 		fi
 		# install
@@ -76,7 +78,7 @@ function install_dysk_module()
 		echo "INF: dysk found on this machine"
 	fi
 
-	//modinfo dysk
+	#modinfo dysk
 }
 
 function main()

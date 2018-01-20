@@ -1,5 +1,8 @@
 # Build & Install #
 
+> dysk kernel Module has been tested against 4.10.x++ kernel versions
+
+
 ## Shortcut ##
 
 The easiest way to quickly run dysk is to source a shortcut script. The script defines alias for installing 
@@ -18,14 +21,7 @@ install_dysk
 dyskctl
 ```
 
-> The below instructions detailed for manual build/install experience or via running containers.
-
-
-## dysk Kernel Module ##
-If you don't want to build the module + CLI, you can download the binaries from the [release](https://github.com/khenidak/dysk/releases) - COMING SOON - page.
-
-
-> Module has been tested against 4.10.x++ kernel versions
+> The below instructions are detailed for manual build/install experience or via running containers.
 
 ### Using Docker ###
 
@@ -53,12 +49,13 @@ docker run --rm \
 
 ```bash
 # Debian
+sudo apt-get install -y update
 sudo apt-get install linux-headers-$(uname -r)
 ```
+
 2. Dependencies
 
 ```bash
-sudo apt-get install -y update
 sudo apt-get install -y build-essential
 ```
 
@@ -75,7 +72,7 @@ make
 
 ```bash
 #manual
-cd module # or download location
+cd module
 sudo insmod dysk.ko
 
 #or (on repo root)
