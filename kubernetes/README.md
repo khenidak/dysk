@@ -75,6 +75,17 @@ shm                 64M     0   64M   0% /dev/shm
 tmpfs              3.4G   12K  3.4G   1% /run/secrets/kubernetes.io/serviceaccount
 ```
 
+### how to get azure disk lease id
+Open Azure Powershell
+```
+$account = New-AzureStorageContext -StorageAccountName account-name -StorageAccountKey account-key -Protocol http
+$disks = $account | Get-AzureStorageBlob -Container dysks
+
+$disks[0].ICloudBlob.BreakLease()
+
+$uuid = [guid]::NewGuid()
+$disks[0].ICloudBlob.AcquireLease($null, $uuid.Guid)
+```
 
 ## More info on FlexVol drivers
 [Flexvolume doc](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md)
