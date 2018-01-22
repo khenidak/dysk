@@ -12,9 +12,12 @@ spec:
   volumes:
   - name: test
     flexVolume:
-      driver: "foo/dysk"
+      driver: "dysk/dysk"
+      fsType: "ext4"
+      readOnly: false
       secretRef:
         name: dyskcreds
       options:
-        accountName: "{Account-Name-Here}"
-        pageBlobPath: "/blob-container/blob-page.vhd"
+        accountName: "account-name"
+        container: "blob-container-name"
+        blob: "blob-page.vhd"
