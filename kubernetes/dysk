@@ -70,7 +70,7 @@ mount() {
   ## Beging validation + defaulting
   ## ------------------------------
   if [ -z "${VOL_ACCOUNT_NAME}" ] || [ "${ACCOUNTNAME}" != "${VOL_ACCOUNT_NAME}" ]; then
-    echo "ERR: volume is referencing the wrong account name Vol:${VOL_ACCOUNT_NAME} Secret:${ACCOUNTNAME}" >> $ERRORLOG
+    echo "ERR: volume is referencing the wrong account name Vol:${VOL_ACCOUNT_NAME} Secret:${ACCOUNTNAME}" >> $LOG
     errorLog=`tail -n 1 "${LOG}"`
     err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:${errorLog}\"}"
     exit 1
