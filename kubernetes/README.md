@@ -1,6 +1,6 @@
 # Kubernetes volume driver for dysk
 
-> The flex vol at head is a basic implementation, COMING SOON a full blown implementation
+> The flex vol currently supports ReadWriteOnce access mode. Coming Soon: ReadOnlyMany
 
 ## Install
 
