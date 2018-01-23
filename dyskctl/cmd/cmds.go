@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/khenidak/dysk/pkg/client"
 	"github.com/spf13/cobra"
@@ -29,6 +30,16 @@ var (
 
 	autoCreate bool // set when sub command autocreate is used
 	mount      bool // set when mount commands are called
+
+	// Convert args
+	namespace        string
+	reclaimPolicy    string
+	accessMode       string
+	secretName       string
+	secretNamespace  string
+	fsType           string
+	storageClassName string
+	arlabels         string
 
 	mountCmd = &cobra.Command{
 		Use:   "mount",
@@ -92,6 +103,74 @@ dyskctl auto-create --account {account-name} --key {key} --size 4`,
 			autoLeaseFlag = true
 			mount = true
 			mount_create()
+		},
+	}
+
+	convertPvCmd = &cobra.Command{
+		Use:   "convert-pv",
+		Short: "convert a dysk to kuberentes PV",
+		Long: `.
+example:
+dyskctl convert-pv --file {path to file} --secretName {kubernetes secret name} 
+#using stdin
+cat {dysk-file} | dyskctl convert-pv --secretName {kubernetes secret name}
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			// validate
+
+			if "" == secretName {
+				printError(fmt.Errorf("secretName is required"))
+				os.Exit(1)
+			}
+
+			labels := make(map[string]string)
+			splitLabels := strings.Split(arlabels, ",")
+			for _, val := range splitLabels {
+				split := strings.Split(val, "=")
+				labels[split[0]] = split[1]
+			}
+
+			var d client.Dysk
+			var file []byte
+			var err error
+			if "" != filePath {
+				file, err = ioutil.ReadFile(filePath)
+				if nil != err {
+					printError(err)
+					os.Exit(1)
+				}
+			} else {
+				file, err = ioutil.ReadAll(os.Stdin)
+				if nil != err {
+					printError(err)
+					os.Exit(1)
+				}
+			}
+
+			err = json.Unmarshal(file, &d)
+			if nil != err {
+				printError(err)
+				os.Exit(1)
+			}
+
+			pv := dysk2Pv(namespace,
+				reclaimPolicy,
+				accessMode,
+				secretName,
+				secretNamespace,
+				fsType,
+				d.Type == client.ReadOnly || readOnlyFlag,
+				storageClassName,
+				labels,
+				&d)
+
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "    ")
+			err = enc.Encode(pv)
+			if nil != err {
+				printError(err)
+			}
+
 		},
 	}
 
@@ -214,11 +293,23 @@ func init() {
 	deleteCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "dysk is already leased, use this lease while deleting")
 	deleteCmd.PersistentFlags().BoolVarP(&breakLeaseFlag, "break-lease", "b", false, "force delete even page blob is leased")
 
-	// MOUNT CREATE WE NEED SIZE //
+	// MOUNT CREATE - WE NEED SIZE //
 	mountCreateCmd.PersistentFlags().UintVarP(&size, "size", "n", 2, "page blob size gb")
 
-	// MOUNT BASED ON FILE //
-	mountFileCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "json file path location")
+	// CONVERT PV //
+	convertPvCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "json file path")
+	convertPvCmd.PersistentFlags().StringVar(&storageClassName, "storageclass-name", "", "volume storage class")
+
+	convertPvCmd.PersistentFlags().StringVar(&namespace, "namespace", "", "volume namespace")
+	convertPvCmd.PersistentFlags().StringVar(&reclaimPolicy, "reclaim-policy", "Retain", "volume reclaim policy")
+	convertPvCmd.PersistentFlags().StringVar(&accessMode, "access-mode", "ReadWriteOnce", "volume access mode")
+	convertPvCmd.PersistentFlags().StringVar(&secretName, "secret-name", "", "Flex vol secret ref (name) ")
+	convertPvCmd.PersistentFlags().StringVar(&secretNamespace, "secret-namespace", "", "Flex vol secret ref (namespace) only kubernetes-v10+ ")
+	convertPvCmd.PersistentFlags().StringVar(&fsType, "fsType", "ext4", "volume filesystem type - if dysk is row it will be formatted with fstype")
+	convertPvCmd.PersistentFlags().StringVar(&arlabels, "labels", "", "pv labels key1=val1,key2=val2")
+	convertPvCmd.PersistentFlags().BoolVar(&readOnlyFlag, "read-only", false, "override dysk readonly value")
+	//MOUNT BASED ON FILE //
+	mountFileCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "json file path")
 
 	// UNMOUNT //
 	unmountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name")
@@ -238,6 +329,7 @@ func init() {
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(convertPvCmd)
 	rootCmd.AddCommand(mountFileCmd)
 	rootCmd.AddCommand(unmountCmd)
 	rootCmd.AddCommand(getCmd)

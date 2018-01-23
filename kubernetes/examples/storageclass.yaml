@@ -1,0 +1,4 @@
+nd: StorageClass
+metadata:
+  name: flexvoldysk01
+provisioner: kubernetes.io/flexvolume

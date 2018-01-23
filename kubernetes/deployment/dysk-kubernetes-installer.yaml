@@ -25,7 +25,7 @@ spec:
         # * if you have used flex before on your cluster, use same directory
         # set TARGET_DIR env var and mount the same directory to to the container
       - name: flexvol-driver-installer
-        image: "khenidak/dysk-flexvol-installer:0.3"
+        image: "khenidak/dysk-flexvol-installer:0.5"
         env:
         #forces the container not to exit 
         # to solve for this https://github.com/kubernetes/kubernetes/issues/17182

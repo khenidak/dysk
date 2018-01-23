@@ -123,7 +123,7 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 		return "", err
 	}
 
-	fmt.Fprintf(os.Stderr, "Created PageBlob in account:%s %s/%s(%dGiB)\n", c.storageAccountName, container, pageBlobName, sizeGB)
+	//fmt.Fprintf(os.Stderr, "Created PageBlob in account:%s %s/%s(%dGiB)\n", c.storageAccountName, container, pageBlobName, sizeGB)
 
 	// is it vhd?
 	h := vhd.CreateFixedHeader(uint64(sizeBytes), &vhd.VHDOptions{})
@@ -143,7 +143,7 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 		return "", err
 	}
 
-	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
+	//	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
 
 	if lease {
 		leaseId, err := page_blob_lease(pageBlob, false)
@@ -220,11 +220,14 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 	}
 
 	if breakleaseflag {
-		if err := breakLease(d); nil != err {
-			fmt.Fprintf(os.Stderr, "Device:%s on %s/$s is unmounted but failed to break lease\n", d.Name, d.AccountName, d.AccountKey)
-		} else {
-			fmt.Fprintf(os.Stderr, "Broke lease while unmounting device:%s on %s:%s\n", d.Name, d.AccountName, d.Path)
-		}
+		_ = breakLease(d) // We ignore break leases error
+		/*
+					if err := breakLease(d); nil != err {
+			      fmt.Fprintf(os.Stderr, "Device:%s on %s/$s is unmounted but failed to break lease\n", d.Name, d.AccountName, d.AccountKey)
+					} else {
+						fmt.Fprintf(os.Stderr, "Broke lease while unmounting device:%s on %s:%s\n", d.Name, d.AccountName, d.Path)
+					}
+		*/
 	}
 	return nil
 }

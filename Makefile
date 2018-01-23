@@ -1,9 +1,9 @@
 SHELL := /bin/bash
 MKFILE_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-DYSK_CLI_TAG ?= khenidak/dysk-cli:0.2
+DYSK_CLI_TAG ?= khenidak/dysk-cli:0.3
 DYSK_INSTALLER_TAG ?= khenidak/dysk-installer:0.4
-DYSK_FLEXVOL_INSTALLER_TAG ?= khenidak/dysk-flexvol-installer:0.3
+DYSK_FLEXVOL_INSTALLER_TAG ?= khenidak/dysk-flexvol-installer:0.5
 
 MODULE_DIR = "$(MKFILE_DIR)/module"
 CLI_DIR = "$(MKFILE_DIR)/dyskctl"
