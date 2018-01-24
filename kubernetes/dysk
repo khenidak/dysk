@@ -65,20 +65,32 @@ mount() {
   local CONTAINER_NAME="$(echo "$@" | "$JQ" -r '.container //empty')"
   local BLOB_NAME="$(echo "$@" | "$JQ" -r '.blob //empty')"  
   local VOL_ACCOUNT_NAME="$(echo "$@" | "$JQ" -r '.accountName //empty')"
-
+  local SIZE="$(echo "$@" | "$JQ" -r '.size //empty')"
+  
   ## ------------------------------
   ## Beging validation + defaulting
   ## ------------------------------
   if [ -z "${VOL_ACCOUNT_NAME}" ] || [ "${ACCOUNTNAME}" != "${VOL_ACCOUNT_NAME}" ]; then
-    echo "ERR: volume is referencing the wrong account name Vol:${VOL_ACCOUNT_NAME} Secret:${ACCOUNTNAME}" >> $LOG
+    echo "`date` ERR: volume is referencing the wrong account name Vol:${VOL_ACCOUNT_NAME} Secret:${ACCOUNTNAME}" >> $LOG
     errorLog=`tail -n 1 "${LOG}"`
     err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:${errorLog}\"}"
     exit 1
   fi
   
-  if [ -z "${CONTAINER_NAME}" ] || [ -z "${BLOB_NAME}" ]; then
-    err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:CONTAINER_NAME:"${PAGE_BLOB_PATH}" or CONTAINER_NAME:"${BLOB_NAME}" is empty\"}"
-    exit 1
+  local container_param=""
+  if [ ! -z "${CONTAINER_NAME}" ]; then
+    container_param="-c ${CONTAINER_NAME}"
+  fi
+  
+  local pageblob_param=""
+  local lease_command=""
+  local autocreate_command=""
+  if [ ! -z "${BLOB_NAME}" ]; then
+    pageblob_param="-p ${BLOB_NAME}"
+    lease_command="--auto-lease --break-lease"
+  else
+    #TODO: add $SIZE check here [1, 1023]
+    autocreate_command="auto-create -n ${SIZE}"
   fi
   
   if ismounted ; then
@@ -89,22 +101,22 @@ mount() {
 
   # set fs to ext4 if not provided by user
   if [ -z "${FS_TYPE}" ]; then
-    echo "INF:fstype was empty and will set it to ext4" >>$LOG
+    echo "`date` INF:fstype was empty and will set it to ext4" >>$LOG
     FS_TYPE="ext4"
   fi
 
-  read_only=""
-  if [ "${READ_ONLY}" = "true" ]; then
-    read_only="--read-only"
+  read_only_param=""
+  if [ $READ_ONLY ]; then
+    read_only_param="--read-only"
   fi
 
-  echo "EXEC: mkdir -p ${MNTPATH}" >> $LOG
+  echo "`date` EXEC: mkdir -p ${MNTPATH}" >> $LOG
   mkdir -p ${MNTPATH} >>$LOG 2>&1
 
-  lease_command="--auto-lease --break-lease"
-  
-  command_execute="${DYSKCTL}  mount -a "${ACCOUNTNAME}" -k "${ACCOUNTKEY}" --container-name ${CONTAINER_NAME} --pageblob-name ${BLOB_NAME} ${lease_command} ${read_only}"
-  echo "INF: dysk mount command - ${command_execute} " >> $LOG
+  command_execute="${DYSKCTL} mount ${autocreate_command} -a "${ACCOUNTNAME}" -k "${ACCOUNTKEY}" ${container_param} ${pageblob_param} ${lease_command} ${read_only_param}"
+  # we don't output ACCOUNTKEY here
+  output_comand="${DYSKCTL} mount ${autocreate_command} -a "${ACCOUNTNAME}" -k ... ${container_param} ${pageblob_param} ${lease_command} ${read_only_param}"
+  echo "`date` INF: dysk mount command - ${output_comand} " >> $LOG
 
   result=$(eval "${command_execute} -o json 2>>${LOG}")
   diskname=`echo "$result" | "$JQ" -r '.Name //empty'`
@@ -114,23 +126,23 @@ mount() {
     exit 1
   fi
 
-  if [ "${READ_ONLY}" != "true" ]; then
+  if [ !$READ_ONLY ]; then
     #formatting
     VOLFSTYPE=$(blkid -o udev ${diskname} 2>/dev/null | grep "ID_FS_TYPE" | cut -d"=" -f2 || echo -n "")
     if [ -z "${VOLFSTYPE}" ]; then
-     echo "INF: disk:${diskname} is not formatted and will be formatted to ${FS_TYPE}" >> $LOG
-     mkfs -t ${FS_TYPE} /dev/${diskname} >/dev/null 2>&1
-     if [ "$?" != "0" ]; then
-       err "{ \"status\": \"Failure\", \"message\": \"Failed to create fs ${FSTYPE} on device ${diskname}\"}"
-       exit 1
-     fi
+      echo "`date` INF: disk:${diskname} is not formatted and will be formatted to ${FS_TYPE}" >> $LOG
+      mkfs -t ${FS_TYPE} /dev/${diskname} >/dev/null 2>&1
+      if [ "$?" != "0" ]; then
+        err "{ \"status\": \"Failure\", \"message\": \"Failed to create fs ${FSTYPE} on device ${diskname}\"}"
+        exit 1
+      fi
     else
-      echo "INF: disk:${diskname} has fstype:${VOLFSTYPE} and will not be formatted" >> $LOG
+      echo "`date` INF: disk:${diskname} has fstype:${VOLFSTYPE} and will not be formatted" >> $LOG
     fi
   fi
 
   #mounting
-  echo "EXEC: /bin/mount /dev/${diskname} "${MNTPATH}"" >>$LOG
+  echo "`date` EXEC: /bin/mount /dev/${diskname} "${MNTPATH}"" >>$LOG
   /bin/mount /dev/$diskname "${MNTPATH}" >>$LOG 2>&1
   if [ "$?" != "0" ]; then
     errorLog=`tail -n 1 "${LOG}"`
@@ -154,12 +166,12 @@ unmount() {
   #find device name
   local devname=`findmnt -n -o SOURCE ${MNTPATH}`
   if [ ${#devname} -lt 5 ]; then
-    echo "INF: mount path:${MNTPATH} has no mounts" >> $LOG
+    echo "`date` INF: mount path:${MNTPATH} has no mounts" >> $LOG
     log '{"status": "Success"}'
     exit 0
   fi
 
-  echo "EXEC: umount $MNTPATH, devname: $devname" >>$LOG
+  echo "`date` EXEC: umount $MNTPATH, devname: $devname" >>$LOG
   /bin/umount $MNTPATH >> $LOG 2>&1
   if [ "$?" != "0" ]; then
     errorLog=`tail -n 1 "${LOG}"`
@@ -167,7 +179,7 @@ unmount() {
     exit 1
   fi
 
-  echo "EXEC: rmdir ${MNTPATH}" >> $LOG
+  echo "`date` EXEC: rmdir ${MNTPATH}" >> $LOG
   rmdir "${MNTPATH}" >> $LOG 2>&1
 
   local diskname=`echo $devname | cut -d '/' -f3`
@@ -176,7 +188,7 @@ unmount() {
     exit 1
   fi
 
-  echo "EXEC:dyskctl unmount -d $diskname" >>$LOG
+  echo "`date` EXEC:dyskctl unmount -d $diskname" >>$LOG
   ${DYSKCTL} unmount -d $diskname >>$LOG 2>&1
   if [ $? -ne 0 ]; then
     errorLog=`tail -n 1 "${LOG}"`
@@ -217,5 +229,4 @@ case "$op" in
 esac
 
 exit 1
-
 

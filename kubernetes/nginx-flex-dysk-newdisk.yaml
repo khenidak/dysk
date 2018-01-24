@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-flex-dysk
+spec:
+  containers:
+  - name: nginx-flex-dysk
+    image: nginx
+    volumeMounts:
+    - name: test
+      mountPath: /data
+  volumes:
+  - name: test
+    flexVolume:
+      driver: "dysk/dysk"
+      fsType: "ext4"
+      readOnly: false
+      secretRef:
+        name: dyskcreds
+      options:
+        accountName: "account-name"
+        size: "5"

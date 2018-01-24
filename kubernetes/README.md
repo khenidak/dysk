@@ -50,11 +50,15 @@ sudo systemctl restart kubelet
 1. create a secret which stores storage  account name and key (dysk uses Azure storage page blobs)
 
 ```
-kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="dysk/dysk"
+kubectl create secret generic dyskcreds --from-literal accountname=ACCOUNTNAME --from-literal accountkey="PASSWORD" --type="dysk/dysk"
 ```
 
-2. create a pod with flexvolume-dysk mount on linux
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk.yaml
+2. create a pod with flexvolume-dysk mount(create azure disk dynamically) on linux
+download `nginx-flex-dysk-newdisk.yaml` file and modify `accountName`, `size` value
+```
+wget https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk-newdisk.yaml
+kubectl create -f nginx-flex-dysk-newdisk.yaml
+```
 
 3. watch the status of pod until its Status changed from `Pending` to `Running`
 ```watch kubectl describe po nginx-flex-dysk```
