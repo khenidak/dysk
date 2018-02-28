@@ -268,7 +268,7 @@ func init() {
 	mountCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name")
 	mountCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
 	mountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
-	mountCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "an existing valid lease id of the page  blob")
+	mountCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "an existing valid lease id of the page blob (not needed for r/o dysks)")
 	mountCmd.PersistentFlags().BoolVarP(&vhdFlag, "vhd", "v", true, "writes the vhd footer to the blob page")
 	mountCmd.PersistentFlags().BoolVarP(&readOnlyFlag, "read-only", "r", false, "mount dysk as read only")
 	mountCmd.PersistentFlags().BoolVarP(&autoLeaseFlag, "auto-lease", "l", true, "create lease if not provided")

@@ -198,7 +198,8 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 	}
 	defer c.closeDeviceFile()
 
-	// if break lease is flagged keep a reference to it
+	// if break lease is flagged keep a reference to dysk
+	// which include lease id
 	if breakleaseflag {
 		d, err = c.get(name)
 		if nil != err {
@@ -219,7 +220,7 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 		return fmt.Errorf(res.response)
 	}
 
-	if breakleaseflag {
+	if breakleaseflag && Len(d.LeaseId) > 0 {
 		_ = breakLease(d) // We ignore break leases error
 		/*
 					if err := breakLease(d); nil != err {
@@ -364,18 +365,20 @@ func (c *dyskclient) pageblob_get(d *Dysk) (*storage.Blob, error) {
 
 // sets sizeGb on dysk
 func (c *dyskclient) set_pageblob_size(d *Dysk) error {
+	var getProps *storage.GetBlobPropertiesOptions
 	pageBlob, err := c.pageblob_get(d)
 	if nil != err {
 		return err
 	}
 
-	// Read Properties if read && is page blog then we are cool
-	getProps := storage.GetBlobPropertiesOptions{
-		LeaseID: d.LeaseId,
+	if ReadOnly != d.Type {
+		// Read Properties if read && is page blog then we are cool
+		getProps = &storage.GetBlobPropertiesOptions{
+			LeaseID: d.LeaseId,
+		}
 	}
-
 	// Failed to read Properties?
-	if err := pageBlob.GetProperties(&getProps); nil != err {
+	if err := pageBlob.GetProperties(getProps); nil != err {
 		return err
 	}
 
@@ -401,7 +404,7 @@ func (c *dyskclient) pre_mount(d *Dysk, autoLease, breakExistingLease bool) erro
 		return err
 	}
 
-	if "" == d.LeaseId && autoLease {
+	if ReadOnly != d.Type && "" == d.LeaseId && autoLease {
 		lease, err := page_blob_lease(pageBlob, breakExistingLease)
 		if nil != err {
 			return err
@@ -464,17 +467,26 @@ func page_blob_lease(pageBlob *storage.Blob, breakExistingLease bool) (string, e
 }
 
 func (c *dyskclient) validateLease(d *Dysk) error {
+	var getProps *storage.GetBlobPropertiesOptions
 	pageBlob, err := c.pageblob_get(d)
 	if nil != err {
 		return err
 	}
+
+	// for r/o dysks, this is all we need
+	if ReadOnly == d.Type {
+		return nil
+	}
+
 	// Read Properties if read && is page blog then we are cool
-	getProps := storage.GetBlobPropertiesOptions{
-		LeaseID: d.LeaseId,
+	if ReadOnly != d.Type {
+		getProps = &storage.GetBlobPropertiesOptions{
+			LeaseID: d.LeaseId,
+		}
 	}
 
 	// Failed to read Properties?
-	if err = pageBlob.GetProperties(&getProps); nil != err {
+	if err = pageBlob.GetProperties(getProps); nil != err {
 		return err
 	}
 
@@ -482,20 +494,8 @@ func (c *dyskclient) validateLease(d *Dysk) error {
 		return fmt.Errorf("This blob is not a page blob")
 	}
 
-	//if dysk is readonly then we are done now
-	if ReadOnly == d.Type {
-		return nil
-	}
-
-	pageBlob.Metadata["dysk"] = "dysk" //Setting a metadata value to ensure that we have write lease
-	setMetaDataProps := storage.SetBlobMetadataOptions{
-		LeaseID: d.LeaseId,
-	}
-
-	if err = pageBlob.SetMetadata(&setMetaDataProps); nil != err {
-		return err
-	}
-
+	// We don't need to validate leases for write. Since
+	// leases are read/write.
 	return nil
 }
 
@@ -548,7 +548,7 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 		d.host = fmt.Sprintf("%s.blob.core.windows.net", d.AccountName) // Won't support sovereign clouds for now
 	}
 
-	if 0 == len(d.LeaseId) || LEASE_ID_LEN < len(d.LeaseId) {
+	if ReadOnly != d.Type && (0 == len(d.LeaseId) || LEASE_ID_LEN < len(d.LeaseId)) {
 		return fmt.Errorf("Invalid Lease Id. Must be <= 32")
 	}
 

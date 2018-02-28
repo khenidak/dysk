@@ -74,11 +74,26 @@ static const char *get_request_head = "GET %s HTTP/1.1\r\n"
                                       "Authorization: SharedKey %s:%s\r\n"
                                       "x-ms-version: 2017-04-17\r\n\r\n";
 
+// GET REQUEST HEADER (No Lease)
+// Used by readonly disks
+//PATH/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
+static const char *get_request_head_no_lease = "GET %s HTTP/1.1\r\n"
+                                      "Host: %s\r\n"
+                                      "Content-Length: %d\r\n"
+                                      "x-ms-range: bytes=%lu-%lu\r\n"
+                                      "x-ms-date: %s\r\n"
+                                      "Authorization: SharedKey %s:%s\r\n"
+                                      "x-ms-version: 2017-04-17\r\n\r\n";
+
 // StringToSign: https://docs.microsoft.com/en-us/rest/api/storageservices/authentication-for-the-azure-storage-services
 // Content-Length/Date/LeaseId/Range-Start/Range-End/AccountName/Path
 static const char *put_request_sign = "PUT\n\n\n%lu\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-page-write:update\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s\ncomp:page";
+
 // Date/leaseId/Range-Start/Range-End/AccountName/Path
 static const char *get_request_sign = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
+
+// Date/Range-Start/Range-End/AccountName/Path
+static const char *get_request_sign_no_lease = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
 
 /*
   Notes on mem alloc:
@@ -482,6 +497,16 @@ int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_
   memset(signstring, 0, SIGN_STRING_LENGTH);
 
   if (READ == dir) {
+    if(1 == d->def->readOnly){
+    // we ignore lease if disk is readonly
+    sprintf(signstring, get_request_sign_no_lease,
+            date,
+            range_start,
+            range_end,
+            d->def->accountName,
+            d->def->path);
+
+    } else {
     // date/Range-Start/Range-End/AccountName/Path
     sprintf(signstring, get_request_sign,
             date,
@@ -490,6 +515,7 @@ int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_
             range_end,
             d->def->accountName,
             d->def->path);
+   }
   } else {
     // Date/Range-Start/Range-End/AccountName/Path
     sprintf(signstring, put_request_sign,
@@ -521,6 +547,18 @@ int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_
   if (!encodedToken) goto done;
 
   if (READ == dir) {
+    if(1 == d->def->readOnly){
+    // readonly disks we ignore lease
+     sprintf(header_buffer, get_request_head_no_lease,
+            d->def->path,
+            d->def->host,
+            0,
+            range_start,
+            range_end,
+            date,
+            d->def->accountName,
+            encodedToken);
+    }else{
     //PATH/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
     sprintf(header_buffer, get_request_head,
             d->def->path,
@@ -532,6 +570,7 @@ int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_
             date,
             d->def->accountName,
             encodedToken);
+    }
   } else {
     //PATH/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
     sprintf(header_buffer, put_request_head,
