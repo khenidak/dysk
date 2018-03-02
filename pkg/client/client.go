@@ -220,7 +220,7 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 		return fmt.Errorf(res.response)
 	}
 
-	if breakleaseflag && Len(d.LeaseId) > 0 {
+	if breakleaseflag && len(d.LeaseId) > 0 {
 		_ = breakLease(d) // We ignore break leases error
 		/*
 					if err := breakLease(d); nil != err {
