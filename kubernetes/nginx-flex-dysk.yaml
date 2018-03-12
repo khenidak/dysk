@@ -12,7 +12,7 @@ spec:
   volumes:
   - name: test
     flexVolume:
-      driver: "dysk/dysk"
+      driver: "azure/dysk"
       fsType: "ext4"
       readOnly: false
       secretRef:

@@ -50,7 +50,7 @@ sudo systemctl restart kubelet
 1. create a secret which stores storage  account name and key (dysk uses Azure storage page blobs)
 
 ```
-kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="dysk/dysk"
+kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="azure/dysk"
 ```
 
 2. create a pod with flexvolume-dysk mount on linux

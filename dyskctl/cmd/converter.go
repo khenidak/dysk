@@ -73,7 +73,7 @@ func dysk2Pv(namespace string, reclaimPolicy string, accessMode string, secretNa
 				Storage: storageGiB,
 			},
 			FlexVolume: &FlexVol{
-				Driver:    "dysk/dysk",
+				Driver:    "azure/dysk",
 				ReadOnly:  readOnly,
 				Options:   opts,
 				SecretRef: secretRef,

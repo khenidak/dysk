@@ -9,7 +9,7 @@ if [[ -z "${target_dir}" ]];then
   exit 1 # if not set this will put the pod in crash loop
 fi
 
-dysk_vol_dir="${target_dir}/dysk~dysk"
+dysk_vol_dir="${target_dir}/azure~dysk"
 mkdir -p ${dysk_vol_dir}
 
 #copy
