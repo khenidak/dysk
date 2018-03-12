@@ -19,7 +19,7 @@ kubectl create -f storageclass.yaml
 2. Create secret 
 
 ```
-kubectl create  secret generic xdysk --from-literal accountname={ACCOUNT NAME} --from-literal accountkey="{ACCOUNT KEY}" --type="dysk/dysk"
+kubectl create  secret generic xdysk --from-literal accountname={ACCOUNT NAME} --from-literal accountkey="{ACCOUNT KEY}" --type="azure/dysk"
 ```
 
 

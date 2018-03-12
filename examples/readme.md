@@ -1,7 +1,7 @@
 # Before you begin
 
 ## Pre-req
-1. [Install dysk kernel module and dyskctl cli](../docs/build-install.docs)
+1. [Install dysk kernel module and dyskctl cli](../docs/build-install.md)
 2. dysk depends on Azure Storage (Page Blobs). Follow the below steps to create azure storage account via the cli
 
 **Install and configure azure cli**
