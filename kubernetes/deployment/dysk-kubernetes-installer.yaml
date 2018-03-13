@@ -50,7 +50,7 @@ spec:
         #use this to control which version of dysk module 
         # do you want to install
         - name: DYSK_TAG
-          value: e10e02f7e1644f3f4e2931feb7d9e0bf56ebcd53
+          value: 03d39745144154e23f65d62234924d8a3676cb44
         resources:
           requests:
             cpu: 100m
