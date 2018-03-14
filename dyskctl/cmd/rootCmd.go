@@ -11,7 +11,7 @@ import (
 
 var output_format = ""
 var rootCmd = &cobra.Command{
-	Use:   "dyskctl",
+	Use:   "dyskctl mount ",
 	Short: "dyskctl allows interactions with the dysk kernel module",
 	Long: `This application interacts with the dysk kernel module 
 http://github.com/khenidak/dysk/ in order 
