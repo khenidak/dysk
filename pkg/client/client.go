@@ -254,22 +254,22 @@ func (c *dyskclient) Get(deviceName string) (*Dysk, error) {
 }
 
 func (c *dyskclient) List() ([]*Dysk, error) {
+	dysks := make([]*Dysk, 0)
+
 	if err := c.openDeviceFile(); nil != err {
-		return nil, err
+		return dysks, err
 	}
 	defer c.closeDeviceFile()
-
-	var dysks []*Dysk
 
 	buffer := bufferize("-")
 	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTLISTDYYSKS, uintptr(unsafe.Pointer(&buffer[0])))
 	if e != 0 {
-		return nil, e
+		return dysks, e
 	}
 
 	res := parseResponse(buffer)
 	if res.is_error {
-		return nil, fmt.Errorf(res.response)
+		return dysks, fmt.Errorf(res.response)
 	}
 
 	splitNames := strings.Split(res.response, "\n")
@@ -279,7 +279,7 @@ func (c *dyskclient) List() ([]*Dysk, error) {
 		}
 		d, err := c.get(name)
 		if nil != err {
-			return nil, err
+			return dysks, err
 		}
 		c.post_get(d)
 		dysks = append(dysks, d)
