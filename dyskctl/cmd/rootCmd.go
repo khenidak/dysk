@@ -11,18 +11,19 @@ import (
 
 var output_format = ""
 var rootCmd = &cobra.Command{
-	Use:   "dyskctl mount ",
-	Short: "An example of cobra",
-	Long: `This application interacts with dysk kernel module 
+	Use:   "dyskctl",
+	Short: "dyskctl allows interactions with the dysk kernel module",
+	Long: `This application interacts with the dysk kernel module 
 http://github.com/khenidak/dysk/ in order 
-to mount/unmount Azure storage as block devices
+to mount/unmount Azure storage as block devices.
 
-Note: default permission on the device file is for root only . you 
+Note: default permission on the device file is for root only. You 
 will need to sudo while executing dyskctl or change the permission 
-on /dev/dysk device file
+on the /dev/dysk device file.
 `,
 }
 
+// Execute executes the root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
