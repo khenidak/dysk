@@ -1,4 +1,4 @@
-#Command List#
+# Command List
 1. Mount
 2. Unmount
 3. Get Dysk
@@ -7,7 +7,7 @@
 > All input commands are read at max 2048 bytes.Including a null terminator for the entire command and each entry. All responses are max 2048 bytes including a null terminator
 
 
-##General Error Response##
+## General Error Response
 In case of error the following will be used
 
 ```
@@ -15,9 +15,9 @@ ERR\n
 {Message}
 ```
 
-#Mount#
+# Mount
 
-##Request##
+## Request
 
 ```
 TYPE\n 	     	# Max 2 (R ReadOnly RW ReadWrite)
@@ -33,7 +33,7 @@ Lease-Id\n	# max 64
 ```
 
 
-##Response##
+## Response
 Error Message or
 
 ```
@@ -43,15 +43,15 @@ Major\n
 Minor\n
 ```
 
-#Unmount#
+# Unmount
 
-##Request##
+## Request
 
 ```
 DeviceName\n
 ```
 
-##Response##
+## Response
 
 Error Message or 
 
@@ -59,16 +59,16 @@ Error Message or
 OK\n
 ```
 
-#Get Dysk#
+# Get Dysk
 
-##Request##
+## Request
 
 ```
 GET\n
 DeviceName\n
 ```
 
-##Response##
+## Response
 
 Error Message or
 
@@ -77,15 +77,15 @@ Ok\n
 {Mount Response Message}\n'
 ```
 
-#List#
+# List
 
-##Request##
+## Request
 
 ```
 LIST
 ```
 
-##Resonse##
+## Resonse
 
 Error Message or
 
