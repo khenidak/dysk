@@ -5,11 +5,11 @@
 
 #include "dysk_bdd.h"
 /*
-Worker is a gaint infinite loop over a linked list
-of tasks. Each task can reguster using queue_w_task function. Tasks
+Worker is a giant infinite loop over a linked list
+of tasks. Each task can register using queue_w_task function. Tasks
 register using a state which will be passed on to task upon execution.
 A task can also register a cleanup routine which will be called
-when the function is completed. If no clean routine registerd
+when the function is completed. If no clean routine registered
 a default kfree(state).
 
 When a task executes it can return one of the following results
@@ -25,14 +25,14 @@ in addition to throttling the worker also manages the timeout
 Finally when a dysk is deleted or in catastrophe mode the worker
 does not execute linked tasks instead calls the clean up routines.
 
-all tasks are expected to be none-blocking mode.
+all tasks are expected to be non-blocking mode.
 */
 
-#define W_TASK_TIMEOUT jiffies + (30 * HZ)
-#define DYSK_THROTTLE_DEFAULT jiffies + (HZ /10)
+#define W_TASK_TIMEOUT jiffies + (300 * HZ)
+#define DYSK_THROTTLE_DEFAULT jiffies + (HZ / 10)
 #define WORKER_SLAB_NAME "dysk_worker_tasks"
 // Default clean up function for state, we use kfree
-void  default_w_task_state_clean(w_task *this_task, task_clean_reason clean_reason)
+void default_w_task_state_clean(w_task *this_task, task_clean_reason clean_reason)
 {
   if (this_task->state) {
     kfree(this_task->state);
@@ -90,7 +90,7 @@ static inline void execute(dysk_worker *dw, w_task *w)
 
   // if dysk was throttled, check if we still need to be
   if (0 != w->d->throttle_until && time_after(jiffies, w->d->throttle_until)) {
-    printk(KERN_INFO "dysk:%s throttling is completed", d->def->deviceName);
+    printk(KERN_INFO "dysk: %s throttling is completed", d->def->deviceName);
     d->throttle_until = 0;
   }
 
@@ -115,7 +115,7 @@ static inline void execute(dysk_worker *dw, w_task *w)
       case throttle_dysk: {
         if (0 == d->throttle_until) {
           d->throttle_until = DYSK_THROTTLE_DEFAULT;
-          printk(KERN_INFO "dysk:%s is entring throttling mode", d->def->deviceName);
+          printk(KERN_INFO "dysk: %s is entering throttling mode", d->def->deviceName);
         }
 
         goto dequeue_task;
