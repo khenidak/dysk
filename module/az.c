@@ -1182,6 +1182,7 @@ int az_init(void)
 
   return 0;
 }
+
 void az_teardown(void)
 {
   if (tfm_hmac_sha256) crypto_free_shash(tfm_hmac_sha256);

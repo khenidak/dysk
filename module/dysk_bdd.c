@@ -777,14 +777,14 @@ int endpoint_stop(void)
 int endpoint_start(void)
 {
   if (0 >= (endpoint_major = register_chrdev(endpoint_major, EP_DEVICE_NAME, &ep_ops))) {
-    printk(KERN_INFO "dysk - failed to register char device");
+    printk(KERN_ERR "dysk: failed to register char device");
     return -1;
   }
 
   class = class_create(THIS_MODULE, "dysk");
 
   if (IS_ERR(class)) {
-    printk(KERN_INFO "failed to create class");
+    printk(KERN_ERR "dysk: failed to create class");
     endpoint_stop();
     return -1;
   }
@@ -792,12 +792,12 @@ int endpoint_start(void)
   device = device_create(class, NULL, MKDEV(endpoint_major, 0), "%s", "dysk");
 
   if (IS_ERR(device)) {
-    printk(KERN_INFO "failed to create device");
+    printk(KERN_ERR "dysk: failed to create device");
     endpoint_stop();
     return -1;
   }
 
-  printk(KERN_INFO "dysk - endpoint device registerd with %d major", endpoint_major);
+  printk(KERN_NOTICE "dysk: endpoint device registered with %d major", endpoint_major);
   return 0;
 }
 // -------------------------------------------
@@ -962,10 +962,10 @@ int io_hook(dysk *d)
 
   // add it
   add_disk(gd);
-  printk(KERN_INFO "dysk - disk with name %s was created", d->def->deviceName);
+  printk(KERN_NOTICE "dysk: disk with name %s was created", d->def->deviceName);
   return 0;
 clean_no_mem:
-  printk(KERN_INFO "dysk - failed to allocate memory to init dysk:%s", d->def->deviceName);
+  printk(KERN_WARNING "dysk: failed to allocate memory to init dysk:%s", d->def->deviceName);
 
   if (gd) {
     del_gendisk(gd);
@@ -1017,25 +1017,27 @@ static int __init _init_module(void)
 
   // Azure transfer library
   if (-1 == az_init()) {
+    printk(KERN_ERR "dysk: failed to init Azure transfer library, module is in failed state");
     unload();
     return -1;
   }
 
   // Register dysk major
   if (0 >= (dysk_major = register_blkdev(0, DYSK_BD_NAME))) {
-    printk(KERN_INFO "dysk - failed to registerd block device, module is in failed state");
+    printk(KERN_ERR "dysk: failed to register block device, module is in failed state");
     unload();
     return -1;
   }
 
   // endpoint
   if (0 != endpoint_start()) {
+    printk(KERN_ERR "dysk: failed to start device endpoint, module is in failed state");
     unload();
     return -1;
   }
 
   if (0 != (success = dysk_worker_init(&default_worker))) {
-    printk(KERN_INFO "dysk - failed tp init the worker, module is in failed state");
+    printk(KERN_ERR "dysk: failed to init the worker, module is in failed state");
     unload();
     return success;
   }
@@ -1062,7 +1064,6 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Khaled Henidak (Kal) - khnidk@outlook.com");
 MODULE_DESCRIPTION("Mount cloud storage as block devices");
 MODULE_VERSION("0.0.1");
-
 
 module_init(_init_module);
 module_exit(_module_teardown);
