@@ -1,0 +1,12 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-dysk-flexvol
+spec:
+  accessModes:
+  - ReadWriteOnce  #also supports ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: pv-dysk-flexvol
+  storageClassName: ""
