@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-flex-dysk
+spec:
+  containers:
+  - name: nginx-flex-dysk
+    image: nginx
+    volumeMounts:
+    - name: flexvol-mount
+      mountPath: /data
+  volumes:
+  - name: flexvol-mount
+    persistentVolumeClaim:
+      claimName: pvc-dysk-flexvol

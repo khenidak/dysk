@@ -1,82 +1,140 @@
-# Kubernetes volume driver for dysk
+# dysk FlexVolume driver for Kubernetes (Preview)
+ - supported Kubernetes version: v1.8, v1.9
+ - supported agent OS: Linux 
 
-> The flex vol currently supports ReadWriteOnce access mode. Coming Soon: ReadOnlyMany
+# About
+This driver allows Kubernetes to use [fast kernel-mode mount/unmount AzureDisk](https://github.com/khenidak/dysk)
 
-## Install
-
-### For cluters created with acs-engine 0.12 or later 
-
-> These cluster configured for volume plugins at /etc/kubernetes/volumeplugins on every node
-
-Just run:
+# Prerequisite
+ - A storage account should be created in the same region as the kubernetes cluster
+ - An azure disk should be created in the specified storage account, below example will create a vhd(`dysk01.vhd`) in default container `dysks`
 ```
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/deployment/dysk-system-ns.yaml # creates namespace
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/deployment/dysk-kubernetes-installer.yaml # creates kernel module installer + flex vol install
+docker run --rm \
+	-it --privileged \
+	-v /etc/ssl/certs:/etc/ssl/certs:ro \
+khenidak/dysk-cli:0.4 create --account ACCOUNT-NAME --key ACCOUNT-KEY --device-name dysk01 --size 1
 ```
-### For clusters that has been previously configured for flex vol plugin
 
-1. Modify Volumes/Volumes Mounts ```flexvol-driver-installer``` container in ```dysk-kubernetes-installer.yaml``` to point to the directory that has your current flex volume plugin.
-2. Modify TARGET_DIR env var on ```flexvol-driver-installer``` container in ```dysk-kubernetes-installer.yaml``` to point to the directory that has your current flex volume plugins.
-3. Run the commands above.
-
-### For clusters that has not been configured  flex volume plugins
-
-> kubelet on these cluster is **not** running with ```--volume-plugin-dir``` argument.
-
-1. On each node, perform the following
+# Install dysk driver on a kubernetes cluster
+## 1. config kubelet service (skip this step in [AKS](https://azure.microsoft.com/en-us/services/container-service/) or from [acs-engine](https://github.com/Azure/acs-engine) v0.12.0)
+specify `volume-plugin-dir` in kubelet service config 
 ```
-# find the unit file for  kubelet
-kubelet_uf_path="$(udo systemctl show -p FragmentPath kubelet)"
-echo "kubelet unit file is at ${kubelet_uf_path}"
-
-#edit the file
-sudo vi ${kubelet_uf_path}
-
-# Edit kubelet arguments by adding --volume-plugin-dir
-#example:  <kubelet executable> <args..>    --volume-plugin-dir=/etc/kubernetes/volumeplugins
-
-# if you are running containerized kubelet add the above path as volume
-#example <docker run> <-v args >  --volume=/etc/kubernetes/volumeplugins:/etc/kubernetes/volumeplugins:rw <..other args ..>
-
-# reload systemd and restart kuebelet
+sudo vi /etc/systemd/system/kubelet.service
+  --volume=/etc/kubernetes/volumeplugins:/etc/kubernetes/volumeplugins:rw \
+        --volume-plugin-dir=/etc/kubernetes/volumeplugins \
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
 
-2. Run the commands above
-
-## Basic Usage
-
-1. create a secret which stores storage  account name and key (dysk uses Azure storage page blobs)
-
+Note:
+ - `/etc/kubernetes/volumeplugins` has already been the default flexvolume plugin directory in acs-engine (starting from v0.12.0)
+ - Flexvolume is GA from Kubernetes **1.8** release, v1.7 is depreciated since it does not support [Dynamic Plugin Discovery](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md#dynamic-plugin-discovery).
+ 
+## 2. install dysk FlexVolume driver on every agent node
+### Option#1: Automatically install by k8s daemonset
+ - create daemonset to install dysk driver
 ```
-kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="azure/dysk"
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/deployment/dysk-flexvol-installer.yaml
 ```
 
-2. create a pod with flexvolume-dysk mount on linux
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk.yaml
-
-3. watch the status of pod until its Status changed from `Pending` to `Running`
-```watch kubectl describe po nginx-flex-dysk```
-
-4. enter the pod container to do validation
-```kubectl exec -it nginx-flex-dysk -- bash```
-
+ - check daemonset status:
 ```
+kubectl describe daemonset dysk-flexvol-installer --namespace=flex
+kubectl get po --namespace=flex
+```
+
+### Option#2: Manually install on every agent node (depreciated)
+```
+sudo mkdir -p /etc/kubernetes/volumeplugins/azure~dysk/
+cd /etc/kubernetes/volumeplugins/azure~dysk/
+
+sudo wget -O dysk https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/dysk
+sudo chmod a+x dysk
+```
+
+# Basic Usage
+## 1. create a secret which stores dysk account name and password
+```
+kubectl create secret generic dyskcreds --from-literal username=USERNAME --from-literal password="PASSWORD" --type="azure/dysk"
+```
+
+## 2. create a pod with dysk flexvolume mount on linux
+#### Option#1: Tie a flexvolume explicitly to a pod
+- download `nginx-flex-dysk.yaml` file and modify `container`, `blob` fields
+```
+wget -O nginx-flex-dysk.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/nginx-flex-dysk.yaml
+vi nginx-flex-dysk.yaml
+```
+ - create a pod with dysk flexvolume driver mount
+```
+kubectl create -f nginx-flex-dysk.yaml
+```
+
+#### Option#2: Create dysk flexvolume PV & PVC and then create a pod based on PVC
+> Note:
+>  - access modes of blobfuse PV supports ReadWriteOnce(RWO), ReadOnlyMany(ROX)
+>  - `readOnly` field **must** be set as `true` in `pv-dysk-flexvol.yaml` when `accessModes` of PV is set as `ReadOnlyMany`
+ - download `pv-dysk-flexvol.yaml` file, modify `container`, `blob`, `storage` fields and create a dysk flexvolume persistent volume(PV)
+```
+wget https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/pv-dysk-flexvol.yaml
+vi pv-dysk-flexvol.yaml
+kubectl create -f pv-dysk-flexvol.yaml
+```
+
+ - create a dysk flexvolume persistent volume claim(PVC)
+```
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/pvc-dysk-flexvol.yaml
+```
+
+ - check status of PV & PVC until its Status changed to `Bound`
+ ```
+kubectl get pv
+kubectl get pvc
+ ```
+ 
+ - create a pod with dysk flexvolume PVC
+```
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/nginx-flex-dysk-pvc.yaml
+ ```
+
+ - watch the status of pod until its Status changed from `Pending` to `Running`
+```
+watch kubectl describe po nginx-flex-dysk
+```
+
+## 3. enter the pod container to do validation
 kubectl exec -it nginx-flex-dysk -- bash
+
+```
 root@nginx-flex-dysk:/# df -h
 Filesystem         Size  Used Avail Use% Mounted on
-overlay            291G  3.9G  287G   2% /
+overlay            291G  6.3G  285G   3% /
 tmpfs              3.4G     0  3.4G   0% /dev
 tmpfs              3.4G     0  3.4G   0% /sys/fs/cgroup
-/dev/dyskI7cFTURv  5.8G   12M  5.5G   1% /data
-/dev/sda1          291G  3.9G  287G   2% /etc/hosts
+/dev/dyskpoosf9g0  992M  1.3M  924M   1% /data
+/dev/sda1          291G  6.3G  285G   3% /etc/hosts
 shm                 64M     0   64M   0% /dev/shm
 tmpfs              3.4G   12K  3.4G   1% /run/secrets/kubernetes.io/serviceaccount
+tmpfs              3.4G     0  3.4G   0% /sys/firmware
+```
+In the above example, there is a `/data` directory mounted as dysk filesystem.
+
+### Tips
+#### How to use flexvolume driver in Helm
+Since flexvolume does not support dynamic provisioning, storageClass should be set as empty in Helm chart, take [wordpress](https://github.com/kubernetes/charts/tree/master/stable/wordpress) as an example:
+ - Set up a dysk flexvolume PV and also `dyskcreds` first
+```
+kubectl create secret generic dyskcreds --from-literal username=USERNAME --from-literal password="PASSWORD" --type="azure/dysk"
+kubectl create -f pv-dysk-flexvol.yaml
+```
+ - Specify `persistence.accessMode=ReadWriteOnce,persistence.storageClass="-"` in [wordpress](https://github.com/kubernetes/charts/tree/master/stable/wordpress) chart
+```
+helm install --set persistence.accessMode=ReadWriteMany,persistence.storageClass="-" stable/wordpress
 ```
 
-
-## More info on FlexVol drivers
+### Links
 [Flexvolume doc](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md)
 
-More clear steps about flexvolume by Redhat doc: [Persistent Storage Using FlexVolume Plug-ins](https://docs.openshift.org/latest/install_config/persistent_storage/persistent_storage_flex_volume.html)
+[Persistent Storage Using FlexVolume Plug-ins](https://docs.openshift.org/latest/install_config/persistent_storage/persistent_storage_flex_volume.html)
+
+[dysk - Fast kernel-mode mount/unmount of AzureDisk](https://github.com/khenidak/dysk)
