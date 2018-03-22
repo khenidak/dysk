@@ -2,7 +2,6 @@ module/.*
 module/Module*
 module/dysk.ko
 *mod.c
-*vendor*
 *.o*
 dyskctl/dyskctl
-
+dyskctl/vendor/github.com/khenidak/dysk/*
