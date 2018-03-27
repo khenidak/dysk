@@ -1,5 +1,5 @@
 # dysk FlexVolume driver for Kubernetes (Preview)
- - supported Kubernetes version: v1.7, v1.8, v1.9
+ - supported Kubernetes version: available from v1.7
  - supported agent OS: Linux 
 
 # About
