@@ -308,7 +308,15 @@ int connection_pool_get(connection_pool *pool, connection **c)
   int success   = -ENOMEM;
 
   if (0 <  connection_pool_count(pool)) { // we have connection in pool
+#if NEW_KERNEL
     kfifo_out(&pool->connection_queue, c, sizeof(connection *));
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+    //https://lkml.org/lkml/2010/10/20/397
+    kfifo_out(&pool->connection_queue, c, sizeof(connection *));
+#pragma GCC diagnostic pop
+#endif
     return 0;
   }
 
@@ -360,7 +368,15 @@ static inline void connection_pool_teardown(connection_pool *pool)
 
   // Close and destroy all the connections
   while (0 < connection_pool_count(pool)) {
+#if NEW_KERNEL
     kfifo_out(&pool->connection_queue, &c, sizeof(connection *));
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+    //https://lkml.org/lkml/2010/10/20/397
+    kfifo_out(&pool->connection_queue, &c, sizeof(connection *));
+#pragma GCC diagnostic pop
+#endif
     connection_teardown(c);
     //kfree(c);
     c = NULL;
@@ -738,7 +754,12 @@ task_result __receive_az_response(w_task *this_task)
     memset(resstate->iov, 0, sizeof(struct iovec));
     resstate->iov->iov_base = (void *) resstate->response_buffer;
     resstate->iov->iov_len = response_size;
-    iov_iter_init(&resstate->msg->msg_iter, READ, resstate->iov, 1, response_size);
+#if NEW_KERNEL
+      iov_iter_init(&resstate->msg->msg_iter, READ, resstate->iov, 1, response_size);
+#else
+      resstate->msg->msg_iov    = resstate->iov;
+      resstate->msg->msg_iovlen = 1;
+#endif
   }
 
   if (0 == http_response_completed(resstate->httpresponse, resstate->response_buffer)) {
@@ -746,7 +767,13 @@ task_result __receive_az_response(w_task *this_task)
     while (0 == http_response_completed(resstate->httpresponse, resstate->response_buffer)) {
       oldfs = get_fs();
       set_fs(KERNEL_DS);
+#if NEW_KERNEL
       success = sock_recvmsg(c->sockt, resstate->msg, MSG_DONTWAIT);
+#else
+      // forward message pointer
+      resstate->iov->iov_base = (resstate->response_buffer + resstate->httpresponse->bytes_received);
+      success = sock_recvmsg(c->sockt, resstate->msg, (response_size - resstate->httpresponse->bytes_received), MSG_DONTWAIT);
+#endif
       set_fs(oldfs);
 
       if (0 >= success) {
@@ -793,7 +820,13 @@ task_result __receive_az_response(w_task *this_task)
       void *target_buffer;
       size_t len;
       //write: Response in request bio
+#if NEW_KERNEL
       rq_for_each_segment(bvec, req, iter) {
+#else
+      struct bio_vec *_bvec;
+      rq_for_each_segment(_bvec, req, iter) {
+      memcpy(&bvec, _bvec, sizeof(struct bio_vec));
+#endif
         len =  bvec.bv_len;
         target_buffer = kmap_atomic(bvec.bv_page);
         memcpy(target_buffer + bvec.bv_offset, resstate->httpresponse->body + mark, len);
@@ -805,7 +838,7 @@ task_result __receive_az_response(w_task *this_task)
     return done;
   }
 
-  printk(KERN_ERR "** Dysk az module got unexpected response and will fail :%s", resstate->response_buffer);
+  printk(KERN_ERR "** dysk az module got unexpected response and will fail :%s", resstate->response_buffer);
   /* we shouldn't be here */
 retry_throttle:
   res = throttle_dysk;
@@ -962,15 +995,34 @@ task_result __send_az_req(w_task *this_task)
     memset(reqstate->header_iov, 0, sizeof(struct iovec));
     reqstate->header_iov->iov_base = reqstate->header_buffer;
     reqstate->header_iov->iov_len  = strlen(reqstate->header_buffer);
+
+#if NEW_KERNEL
     iov_iter_init(&reqstate->header_msg->msg_iter, WRITE, reqstate->header_iov, 1, strlen(reqstate->header_buffer));
+#else
+      reqstate->header_msg->msg_iov    = reqstate->header_iov;
+      reqstate->header_msg->msg_iovlen = 1;
+#endif
+
   }
 
   if (0 == reqstate->header_sent) {
     // Sending header
+#if NEW_KERNEL
     while (msg_data_left(reqstate->header_msg)) {
+#else
+    size_t remaining = strlen(reqstate->header_buffer);
+    while(remaining){
+#endif
       oldfs = get_fs();
       set_fs(KERNEL_DS);
+#if NEW_KERNEL
       success = sock_sendmsg(reqstate->c->sockt, reqstate->header_msg);
+#else
+      //forward buffer pointer
+      reqstate->header_iov->iov_base = reqstate->header_buffer + (strlen(reqstate->header_buffer) - remaining);
+      reqstate->header_iov->iov_len = remaining;
+      success = sock_sendmsg(reqstate->c->sockt, reqstate->header_msg, remaining);
+#endif
       set_fs(oldfs);
 
       if (0 >= success) {
@@ -981,8 +1033,10 @@ task_result __send_az_req(w_task *this_task)
         reqstate->c = NULL;
         goto retry_new_request;
       }
+#if !(NEW_KERNEL)
+    remaining -= success;
+#endif
     }
-
     reqstate->header_sent = 1;
   }
 
@@ -990,6 +1044,9 @@ task_result __send_az_req(w_task *this_task)
     if (!reqstate->body_buffer) {
       struct req_iterator iter;
       struct bio_vec bvec;
+#if !(NEW_KERNEL)
+      struct bio_vec *_bvec;
+#endif
       size_t mark = 0;
       void *target_buffer;
       size_t len;
@@ -1003,7 +1060,15 @@ task_result __send_az_req(w_task *this_task)
        * we fallback to 1 copy operation.
        */
       //copy the entire buffer
+#if NEW_KERNEL
       rq_for_each_segment(bvec, req, iter) {
+#else
+      // this is ugly
+      //  but rq_for_each_segment has changed between
+      //  kernel v3.x and v4.x
+      rq_for_each_segment(_bvec, req, iter) {
+      memcpy(&bvec, _bvec, sizeof(struct bio_vec));
+#endif
         len =  bvec.bv_len;
         target_buffer = kmap_atomic(bvec.bv_page);
         memcpy(reqstate->body_buffer + mark, target_buffer + bvec.bv_offset, len);
@@ -1033,14 +1098,35 @@ task_result __send_az_req(w_task *this_task)
       memset(reqstate->body_iov, 0, sizeof(struct iovec));
       reqstate->body_iov->iov_base = reqstate->body_buffer;
       reqstate->body_iov->iov_len  = blk_rq_bytes(req);
+#if NEW_KERNEL
       iov_iter_init(&reqstate->body_msg->msg_iter, WRITE, reqstate->body_iov, 1, blk_rq_bytes(req));
+#else
+      reqstate->body_msg->msg_iov    = reqstate->body_iov;
+      reqstate->body_msg->msg_iovlen = 1;
+#endif
     }
 
+#if NEW_KERNEL
     // Send
     while (msg_data_left(reqstate->body_msg)) {
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+    size_t remaining = blk_rq_bytes(req);
+#pragma GCC diagnostic pop
+
+    while (remaining) {
+#endif
       oldfs = get_fs();
       set_fs(KERNEL_DS);
+#if NEW_KERNEL
       success = sock_sendmsg(reqstate->c->sockt, reqstate->body_msg);
+#else
+      //forward message body pointer
+      reqstate->body_iov->iov_base = reqstate->body_buffer + (blk_rq_bytes(req) - remaining);
+      reqstate->body_iov->iov_len = remaining;
+      success = sock_sendmsg(reqstate->c->sockt, reqstate->body_msg, remaining);
+#endif
       set_fs(oldfs);
 
       if (0 >= success) {
@@ -1053,6 +1139,9 @@ task_result __send_az_req(w_task *this_task)
         reqstate->c = NULL;
         goto retry_new_request;
       }
+#if !(NEW_KERNEL)
+      remaining -= success;
+#endif
     }
 
     reqstate->body_sent = 1;

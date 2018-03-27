@@ -19,7 +19,7 @@
 
 
 /* avoid building against older kernel */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,0,0)
 #error dysk is for 4.10.0++ kernel versions
 #endif
 
@@ -934,7 +934,10 @@ int io_hook(dysk *d)
   blk_queue_io_min(rq, 512);
   // No support for discard and zeros for this version
   //  TODO: Enable discard, 0s and write-same
-  blk_queue_max_write_zeroes_sectors(rq, 0);
+#if NEW_KERNEL
+    blk_queue_max_write_zeroes_sectors(rq, 0);
+#endif
+
   blk_queue_max_discard_sectors(rq, 0);
   blk_queue_max_write_same_sectors(rq, 0);
   rq->queuedata = d;

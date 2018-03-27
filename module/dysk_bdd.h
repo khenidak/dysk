@@ -5,6 +5,7 @@
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 //Completion variables
 #include <linux/completion.h>
@@ -23,6 +24,11 @@
 #define DYSK_OK          0 // Healthy and working
 #define DYSK_DELETING    1 // Deleting based on user request
 #define DYSK_CATASTROPHE 2 // Something is wrong with connection, lease etc.
+
+// We make a distinction between 4.x and 3.x
+// kernels. The difference is in BLKDEV and
+// sock* apis
+#define NEW_KERNEL (LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0))
 
 // Instance of a mounted disk
 typedef struct dysk dysk;
