@@ -30,7 +30,7 @@ spec:
         # * if you have used flex before on your cluster, use same directory
         # set TARGET_DIR env var and mount the same directory to to the container
       - name: flexvol-driver-installer
-        image: "khenidak/dysk-flexvol-installer:0.5"
+        image: "khenidak/dysk-flexvol-installer:0.6"
         env:
         #forces the container not to exit 
         # to solve for this https://github.com/kubernetes/kubernetes/issues/17182
@@ -45,7 +45,7 @@ spec:
         # the entire github repo, as we move to beta code will 
         # be part of the image
       - name: kernel-module-installer
-        image: "khenidak/dysk-installer:0.5"
+        image: "khenidak/dysk-installer:0.6"
         env:
         #forces the container not to exit 
         # to solve for this https://github.com/kubernetes/kubernetes/issues/17182
@@ -55,7 +55,7 @@ spec:
         #use this to control which version of dysk module 
         # do you want to install
         - name: DYSK_TAG
-          value: 03d39745144154e23f65d62234924d8a3676cb44
+          value: f02fbe61750fc050d759366b9647e7ea6c159e16
         resources:
           requests:
             cpu: 100m
