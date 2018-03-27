@@ -6,7 +6,7 @@ spec:
   capacity:
     storage: 100Gi
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce #ReadOnlyMany is also supported
   persistentVolumeReclaimPolicy: Retain
   flexVolume:
       driver: "azure/dysk"

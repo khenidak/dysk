@@ -13,3 +13,4 @@ spec:
   - name: flexvol-mount
     persistentVolumeClaim:
       claimName: pvc-dysk-flexvol
+      readOnly: true
