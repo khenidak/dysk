@@ -71,7 +71,7 @@ kubectl create secret generic dyskcreds --from-literal username=USERNAME --from-
 ```
 
 ## 2. create a pod with dysk flexvolume mount on linux
-#### Option#1: Tie a flexvolume explicitly to a pod
+#### Example#1: Tie a flexvolume explicitly to a pod (ReadWriteOnce)
 - download `nginx-flex-dysk.yaml` file and modify `container`, `blob` fields
 ```
 wget -O nginx-flex-dysk.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk.yaml
@@ -82,10 +82,10 @@ vi nginx-flex-dysk.yaml
 kubectl create -f nginx-flex-dysk.yaml
 ```
 
-#### Option#2: Create dysk flexvolume PV & PVC and then create a pod based on PVC
+#### Example#2: Create dysk flexvolume PV & PVC and then create a pod based on PVC (ReadOnlyMany)
 > Note:
 >  - access modes of blobfuse PV supports ReadWriteOnce(RWO), ReadOnlyMany(ROX)
->  - `readOnly` field **must** be set as `true` in `pv-dysk-flexvol.yaml` when `accessModes` of PV is set as `ReadOnlyMany`
+>  - `Pod.Spec.Volumes.PersistentVolumeClaim.readOnly` field should be set as `true` when `accessModes` of PV is set as `ReadOnlyMany`
  - download `pv-dysk-flexvol.yaml` file, modify `container`, `blob`, `storage` fields and create a dysk flexvolume persistent volume(PV)
 ```
 wget -O pv-dysk-flexvol.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/pv-dysk-flexvol.yaml
@@ -106,15 +106,15 @@ kubectl get pvc
  
  - create a pod with dysk flexvolume PVC
 ```
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk-pvc.yaml
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk-readonly.yaml
  ```
 
+## 3. enter the pod container to do validation
  - watch the status of pod until its Status changed from `Pending` to `Running`
 ```
 watch kubectl describe po nginx-flex-dysk
 ```
-
-## 3. enter the pod container to do validation
+ - enter the pod container
 kubectl exec -it nginx-flex-dysk -- bash
 
 ```
@@ -141,7 +141,7 @@ kubectl create -f pv-dysk-flexvol.yaml
 ```
  - Specify `persistence.accessMode=ReadWriteOnce,persistence.storageClass="-"` in [wordpress](https://github.com/kubernetes/charts/tree/master/stable/wordpress) chart
 ```
-helm install --set persistence.accessMode=ReadWriteMany,persistence.storageClass="-" stable/wordpress
+helm install --set persistence.accessMode=ReadWriteOnce,persistence.storageClass="-" stable/wordpress
 ```
 
 ### Links
