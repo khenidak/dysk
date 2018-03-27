@@ -1,5 +1,5 @@
 # dysk FlexVolume driver for Kubernetes (Preview)
- - supported Kubernetes version: v1.8, v1.9
+ - supported Kubernetes version: v1.7, v1.8, v1.9
  - supported agent OS: Linux 
 
 # About
@@ -17,11 +17,31 @@ khenidak/dysk-cli:0.4 create --account ACCOUNT-NAME --key ACCOUNT-KEY --device-n
 
 # Install dysk driver on a kubernetes cluster
 ## 1. config kubelet service (skip this step in [AKS](https://azure.microsoft.com/en-us/services/container-service/) or from [acs-engine](https://github.com/Azure/acs-engine) v0.12.0)
-specify `volume-plugin-dir` in kubelet service config 
+ - specify `volume-plugin-dir` in kubelet service config
+
+append following two lines **seperately** into `/etc/systemd/system/kubelet.service` file
 ```
-sudo vi /etc/systemd/system/kubelet.service
   --volume=/etc/kubernetes/volumeplugins:/etc/kubernetes/volumeplugins:rw \
         --volume-plugin-dir=/etc/kubernetes/volumeplugins \
+```
+
+```
+sudo vi /etc/systemd/system/kubelet.service
+...
+ExecStart=/usr/bin/docker run \
+  --net=host \
+  ...
+  --volume=/etc/kubernetes/volumeplugins:/etc/kubernetes/volumeplugins:rw \
+    ${KUBELET_IMAGE} \
+      /hyperkube kubelet \
+        --require-kubeconfig \
+        --v=2 \
+	...
+      --volume-plugin-dir=/etc/kubernetes/volumeplugins \
+        $KUBELET_CONFIG $KUBELET_OPTS \
+        ${KUBELET_REGISTER_NODE} ${KUBELET_REGISTER_WITH_TAINTS}
+...
+
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
@@ -51,6 +71,7 @@ cd /etc/kubernetes/volumeplugins/azure~dysk/
 sudo wget -O dysk https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk/dysk
 sudo chmod a+x dysk
 ```
+> Note: for deployment on v1.7, it requires restarting kubelet on every node(`sudo systemctl restart kubelet`) after daemonset running complete due to [Dynamic Plugin Discovery](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md#dynamic-plugin-discovery) not supported on k8s v1.7
 
 # Basic Usage
 ## 1. create a secret which stores dysk account name and password
