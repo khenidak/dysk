@@ -51,7 +51,6 @@ Note:
  - Flexvolume is GA from Kubernetes **1.8** release, v1.7 is depreciated since it does not support [Dynamic Plugin Discovery](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md#dynamic-plugin-discovery).
  
 ## 2. install dysk FlexVolume driver on every agent node
-### Option#1: Automatically install by k8s daemonset
  - create daemonset to install dysk driver
 ```
 kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/deployment/dysk-flexvol-installer.yaml
@@ -63,14 +62,6 @@ kubectl describe daemonset dysk-flexvol-installer --namespace=flex
 kubectl get po --namespace=flex
 ```
 
-### Option#2: Manually install on every agent node (depreciated)
-```
-sudo mkdir -p /etc/kubernetes/volumeplugins/azure~dysk/
-cd /etc/kubernetes/volumeplugins/azure~dysk/
-
-sudo wget -O dysk https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/dysk
-sudo chmod a+x dysk
-```
 > Note: for deployment on v1.7, it requires restarting kubelet on every node(`sudo systemctl restart kubelet`) after daemonset running complete due to [Dynamic Plugin Discovery](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md#dynamic-plugin-discovery) not supported on k8s v1.7
 
 # Basic Usage
