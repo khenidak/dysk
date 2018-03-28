@@ -4,7 +4,7 @@ metadata:
   name: pvc-dysk-flexvol
 spec:
   accessModes:
-  - ReadWriteOnce  #also supports ReadOnlyMany
+  - ReadOnlyMany  #also supports ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
