@@ -33,19 +33,18 @@
 #define IOCTGETDYSK      9903
 #define IOCTLISTDYYSKS   9904
 
-
-static int ep_open(struct inode *, struct file *);
 static int ep_release(struct inode *, struct file *);
 static ssize_t ep_read(struct file *, char __user *, size_t, loff_t *);
 static ssize_t ep_write(struct file *, const char __user *, size_t, loff_t *);
 static long ep_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 struct file_operations ep_ops = {
-  .owner   = THIS_MODULE,
-  .read    = ep_read,
-  .write   = ep_write,
-  .open    = ep_open,
-  .release = ep_release,
-  .unlocked_ioctl = ep_ioctl
+  .owner          = THIS_MODULE,
+  .llseek         = no_llseek,
+  .read           = ep_read,
+  .write          = ep_write,
+  .open           = nonseekable_open,
+  .release        = ep_release,
+  .unlocked_ioctl = ep_ioctl,
 };
 
 // -----------------------------------
@@ -724,10 +723,6 @@ done:
 // Endpoint char device routines
 // -------------------------------------
 /* Endpoint char device does not do read/write only IOCTL */
-static int ep_open(struct inode *n, struct file *f)
-{
-  return 0;
-}
 static int ep_release(struct inode *n, struct file *f)
 {
   return 0;
@@ -757,7 +752,7 @@ long ep_ioctl(struct file *f, unsigned int cmd, unsigned long args)
       return dysk_list(f, (char *)args);
 
     default:
-      return -ENOTTY;
+      return -EINVAL;
   }
 }
 // ------------------------------

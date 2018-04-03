@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-dysk-flexvol
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadOnlyMany #ReadWriteOnce is also supported
+  persistentVolumeReclaimPolicy: Retain
+  flexVolume:
+      driver: "azure/dysk"
+      readOnly: true
+      fsType: ext4
+      secretRef:
+        name: dyskcreds
+      options:
+        container: CONTAINER-NAME
+        blob: NAME.vhd
