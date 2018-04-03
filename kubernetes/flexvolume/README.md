@@ -24,7 +24,7 @@ Please refer to [config kubelet service to enable FlexVolume driver](https://git
 ## 2. install dysk FlexVolume driver on every agent node
  - create daemonset to install dysk driver
 ```
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/deployment/dysk-flexvol-installer.yaml
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/flexvolume/deployment/dysk-flexvol-installer.yaml
 ```
 
  - check daemonset status:
@@ -45,7 +45,7 @@ kubectl create secret generic dyskcreds --from-literal username=USERNAME --from-
 #### Example#1: Tie a flexvolume explicitly to a pod (ReadWriteOnce)
 - download `nginx-flex-dysk.yaml` file and modify `container`, `blob` fields
 ```
-wget -O nginx-flex-dysk.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk.yaml
+wget -O nginx-flex-dysk.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/flexvolume/nginx-flex-dysk.yaml
 vi nginx-flex-dysk.yaml
 ```
  - create a pod with dysk flexvolume driver mount
@@ -59,14 +59,14 @@ kubectl create -f nginx-flex-dysk.yaml
 >  - `Pod.Spec.Volumes.PersistentVolumeClaim.readOnly` field should be set as `true` when `accessModes` of PV is set as `ReadOnlyMany`
  - download `pv-dysk-flexvol.yaml` file, modify `container`, `blob`, `storage` fields and create a dysk flexvolume persistent volume(PV)
 ```
-wget -O pv-dysk-flexvol.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/pv-dysk-flexvol.yaml
+wget -O pv-dysk-flexvol.yaml https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/flexvolume/pv-dysk-flexvol.yaml
 vi pv-dysk-flexvol.yaml
 kubectl create -f pv-dysk-flexvol.yaml
 ```
 
  - create a dysk flexvolume persistent volume claim(PVC)
 ```
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/pvc-dysk-flexvol.yaml
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/flexvolume/pvc-dysk-flexvol.yaml
 ```
 
  - check status of PV & PVC until its Status changed to `Bound`
@@ -77,7 +77,7 @@ kubectl get pvc
  
  - create a pod with dysk flexvolume PVC
 ```
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/nginx-flex-dysk-readonly.yaml
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/flexvolume/nginx-flex-dysk-readonly.yaml
  ```
 
 ## 3. enter the pod container to do validation
