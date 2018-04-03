@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-csi-dysk-readonly
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadOnlyMany
+  csi:
+    driver: csi-dysk
+    nodePublishSecretRef:
+      name: dyskcreds
+      namespace: default
+    volumeAttributes:
+      blob: DISKNAME.vhd
+      container: dysks
+    volumeHandle: ACCOUNT-NAME/dysks/DISKNAME.vhd
+  persistentVolumeReclaimPolicy: Retain
