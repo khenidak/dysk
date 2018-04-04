@@ -2,10 +2,6 @@
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/string.h>
-//Hash
-#include <linux/crypto.h>
-#include <crypto/hash.h>
-#include <crypto/sha.h>
 //Net
 #include<linux/socket.h>
 #include<linux/in.h>
@@ -53,47 +49,38 @@
 #define RESPONSE_HEADER_LENGTH 1024 // Response Header Length // Azure sends on average 592 bytes
 
 // PUT REQUEST HEADER
-//PATH/HOST/Lease/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
-static const char *put_request_head = "PUT %s?comp=page HTTP/1.1\r\n"
+//PATH/Sas/HOST/Sas/Lease/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
+static const char *put_request_head = "PUT %s?comp=page&%s HTTP/1.1\r\n"
                                       "Host: %s\r\n"
                                       "x-ms-lease-id: %s\r\n"
                                       "Content-Length: %lu\r\n"
                                       "x-ms-page-write: update\r\n"
                                       "x-ms-range: bytes=%lu-%lu\r\n"
                                       "x-ms-date: %s\r\n"
-                                      "x-ms-version: 2017-04-17\r\n"
-                                      "Authorization: SharedKey %s:%s\r\n\r\n";
+                                      "UserAgent: dysk/0.0.1\r\n"
+                                      "x-ms-version: 2017-04-17\r\n\r\n";
+
 // GET REQUEST HEADER
-//PATH/HOST/Lease/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
-static const char *get_request_head = "GET %s HTTP/1.1\r\n"
+//PATH/Sas/HOST/Lease/ContentLength/Range-Start/Range-End/Date/AccountName
+static const char *get_request_head = "GET %s?%s HTTP/1.1\r\n"
                                       "Host: %s\r\n"
                                       "x-ms-lease-id: %s\r\n"
                                       "Content-Length: %d\r\n"
                                       "x-ms-range: bytes=%lu-%lu\r\n"
                                       "x-ms-date: %s\r\n"
-                                      "Authorization: SharedKey %s:%s\r\n"
+                                      "UserAgent: dysk/0.0.1\r\n"
                                       "x-ms-version: 2017-04-17\r\n\r\n";
 
 // GET REQUEST HEADER (No Lease)
 // Used by readonly disks
-//PATH/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
-static const char *get_request_head_no_lease = "GET %s HTTP/1.1\r\n"
+//PATH/Sas/HOST/ContentLength/Range-Start/Range-End/Date/AccountName
+static const char *get_request_head_no_lease = "GET %s?%s HTTP/1.1\r\n"
                                       "Host: %s\r\n"
                                       "Content-Length: %d\r\n"
                                       "x-ms-range: bytes=%lu-%lu\r\n"
                                       "x-ms-date: %s\r\n"
-                                      "Authorization: SharedKey %s:%s\r\n"
+                                      "UserAgent: dysk/0.0.1\r\n"
                                       "x-ms-version: 2017-04-17\r\n\r\n";
-
-// StringToSign: https://docs.microsoft.com/en-us/rest/api/storageservices/authentication-for-the-azure-storage-services
-// Content-Length/Date/LeaseId/Range-Start/Range-End/AccountName/Path
-static const char *put_request_sign = "PUT\n\n\n%lu\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-page-write:update\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s\ncomp:page";
-
-// Date/leaseId/Range-Start/Range-End/AccountName/Path
-static const char *get_request_sign = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-lease-id:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
-
-// Date/Range-Start/Range-End/AccountName/Path
-static const char *get_request_sign_no_lease = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-date:%s\nx-ms-range:bytes=%lu-%lu\nx-ms-version:2017-04-17\n/%s%s";
 
 /*
   Notes on mem alloc:
@@ -107,8 +94,6 @@ static const char *get_request_sign_no_lease = "GET\n\n\n\n\n\n\n\n\n\n\n\nx-ms-
 // -----------------------------
 // Module global State
 // ----------------------------
-// HMAC(SHA25)
-struct crypto_shash *tfm_hmac_sha256 = NULL;
 // for __reqstate __resstate allocation for *all dysks*.
 struct kmem_cache *az_slab;
 
@@ -159,9 +144,6 @@ struct connection {
 struct az_state {
   // Connection pool used by this dysk
   connection_pool *pool;
-  // Base64 decoded account key
-  char *decodedKey;
-  size_t decodedKeyLen;
   // this dysk
   dysk *d;
 };
@@ -485,14 +467,9 @@ int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_
   int dir               = 0;
   // Header Processing
   char *date            = NULL;
-  char *signstring      = NULL;
-  char *authToken       = NULL;
-  char *encodedToken    = NULL;
   dysk *d               = NULL;
-  size_t len            = 0;
   size_t range_start    = 0;
   size_t range_end      = 0;
-  int success           = 0;
   int res = -ENOMEM;
   req = reqstate->req;
   dir = rq_data_dir(req);
@@ -506,112 +483,48 @@ int make_header(__reqstate *reqstate, char *header_buffer, size_t header_buffer_
   if (!date) goto done;
 
   utc_RFC1123_date(date, DATE_LENGTH);
-  signstring = kmalloc(SIGN_STRING_LENGTH, GFP_KERNEL);
-
-  if (!signstring) goto done;
-
-  memset(signstring, 0, SIGN_STRING_LENGTH);
-
-  if (READ == dir) {
-    if(1 == d->def->readOnly){
-    // we ignore lease if disk is readonly
-    sprintf(signstring, get_request_sign_no_lease,
-            date,
-            range_start,
-            range_end,
-            d->def->accountName,
-            d->def->path);
-
-    } else {
-    // date/Range-Start/Range-End/AccountName/Path
-    sprintf(signstring, get_request_sign,
-            date,
-            d->def->lease_id,
-            range_start,
-            range_end,
-            d->def->accountName,
-            d->def->path);
-   }
-  } else {
-    // Date/Range-Start/Range-End/AccountName/Path
-    sprintf(signstring, put_request_sign,
-            blk_rq_bytes(req),
-            date,
-            d->def->lease_id,
-            range_start,
-            range_end,
-            d->def->accountName,
-            d->def->path);
-  }
-
-  authToken = kmalloc(AUTH_TOKEN_LENGTH, GFP_KERNEL);
-
-  if (!authToken) goto done;
-
-  memset(authToken, 0, AUTH_TOKEN_LENGTH);
-  success = calc_hmac(tfm_hmac_sha256,
-                      authToken,
-                      reqstate->azstate->decodedKey,
-                      reqstate->azstate->decodedKeyLen,
-                      signstring, strlen(signstring));
-
-  if (0 != success) goto done; // in the unlikely event
-
-  // hashmac sets null byte in the middle?
-  encodedToken = base64_encode(authToken, 32 /*strlen(authToken)*/, &len); /* hmac function *sometimes places* a null in the middle of the string */
-
-  if (!encodedToken) goto done;
-
   if (READ == dir) {
     if(1 == d->def->readOnly){
     // readonly disks we ignore lease
      sprintf(header_buffer, get_request_head_no_lease,
             d->def->path,
+            d->def->sas,
             d->def->host,
             0,
             range_start,
             range_end,
             date,
-            d->def->accountName,
-            encodedToken);
+            d->def->accountName);
     }else{
-    //PATH/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
+    //PATH/Sas/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
     sprintf(header_buffer, get_request_head,
             d->def->path,
+            d->def->sas,
             d->def->host,
             d->def->lease_id,
             0,
             range_start,
             range_end,
             date,
-            d->def->accountName,
-            encodedToken);
+            d->def->accountName);
     }
   } else {
-    //PATH/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
+    //PATH/Sas/HOST/ContentLength/Range-Start/Range-End/Date/AccountName/AuthToken
     sprintf(header_buffer, put_request_head,
             d->def->path,
+            d->def->sas,
             d->def->host,
             d->def->lease_id,
             blk_rq_bytes(req),
             range_start,
             range_end,
             date,
-            d->def->accountName,
-            encodedToken);
+            d->def->accountName);
   }
 
   res = 0;
 done:
-
   if (date) kfree(date);
-
-  if (signstring) kfree(signstring);
-
-  if (authToken) kfree(authToken);
-
-  if (encodedToken) kfree(encodedToken);
-
   return res;
 }
 
@@ -803,7 +716,7 @@ task_result __receive_az_response(w_task *this_task)
     if (1 == az_is_throttle(resstate->httpresponse->status_code)) goto retry_throttle;
 
     if (1 != az_is_done(resstate->httpresponse->status_code)) {
-      printk(KERN_ERR "** Dysk az module got an expected status code %d and will go into catastrophe mode for [%s] - response is:%s", resstate->httpresponse->status_code, this_task->d->def->deviceName, resstate->httpresponse->body);
+      printk(KERN_ERR "** dysk az module got an expected status code %d and will go into catastrophe mode for [%s] - response is:%s", resstate->httpresponse->status_code, this_task->d->def->deviceName, resstate->httpresponse->body);
       return catastrophe;
     }
 
@@ -1207,11 +1120,8 @@ int az_init_for_dysk(dysk *d)
 
   memset(azstate, 0, sizeof(az_state));
   d->xfer_state = azstate;
-  // Decode the key once and keep it
-  azstate->decodedKey =  base64_decode(d->def->accountKey, strlen(d->def->accountKey), &azstate->decodedKeyLen);
 
-  if (!azstate->decodedKey) goto free_all;
-
+  //connection pool
   pool = kmalloc(sizeof(connection_pool), GFP_KERNEL);
   if (!pool) goto free_all;
   memset(pool, 0, sizeof(connection_pool));
@@ -1235,9 +1145,7 @@ void az_teardown_for_dysk(dysk *d)
 
   if (!azstate) return; // already cleaned.
 
-  if (azstate->decodedKey) kfree(azstate->decodedKey);
-
-  if (azstate->pool) {
+   if (azstate->pool) {
     connection_pool_teardown(azstate->pool);
     kfree(azstate->pool);
   }
@@ -1251,13 +1159,6 @@ void az_teardown_for_dysk(dysk *d)
 int az_init(void)
 {
   int entry_size = 0;
-  // Allocate hash tfm
-  tfm_hmac_sha256 = crypto_alloc_shash("hmac(sha256)", 0, CRYPTO_ALG_ASYNC);
-
-  if (IS_ERR(tfm_hmac_sha256)) {
-    printk(KERN_ERR "dysk can't alloc %s transform: %ld\n", "hmac(sha256)", PTR_ERR(tfm_hmac_sha256));
-    return -1;
-  }
 
   /* Our slab services req state and res state, the difference in size is minimal*/
   entry_size = sizeof(__reqstate) > sizeof(__resstate) ? sizeof(__reqstate) : sizeof(__resstate);
@@ -1274,7 +1175,5 @@ int az_init(void)
 
 void az_teardown(void)
 {
-  if (tfm_hmac_sha256) crypto_free_shash(tfm_hmac_sha256);
-
   if (az_slab) kmem_cache_destroy(az_slab);
 }

@@ -49,7 +49,7 @@ func mount_create() {
 		d.Type = client.ReadOnly
 	}
 	d.AccountName = storageAccountName
-	d.AccountKey = storageAccountKey
+	d.Sas = storageAccountKey
 	d.Name = deviceName
 	d.SizeGB = int(size)
 	d.Path = "/" + container + "/" + pageBlobName

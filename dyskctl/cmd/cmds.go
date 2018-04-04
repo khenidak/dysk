@@ -194,7 +194,7 @@ dyskctl mount-file --file {path to file}`,
 				printError(err)
 				os.Exit(1)
 			}
-			dyskClient := client.CreateClient(d.AccountName, d.AccountKey)
+			dyskClient := client.CreateClientWithSas(d.AccountName, d.Sas)
 			err = dyskClient.Mount(&d, false, false)
 			if nil != err {
 				printError(err)

@@ -283,14 +283,14 @@ static inline int dysk_add(dysk *d, char *error)
 // Dysk def to buffer for Endpoint IOCTL
 void dysk_def_to_buffer(dysk_def *dd, char *buffer)
 {
-  //type-devicename-sectorcount-accountname-accountKey-path-host-ip-lease-major-minor
+  //type-devicename-sectorcount-accountname-sas-path-host-ip-lease-major-minor
   const char *format = "%s\n%s\n%lu\n%s\n%s\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n";
   sprintf(buffer, format,
           (0 == dd->readOnly) ? "RW" : "R",
           dd->deviceName,
           dd->sector_count,
           dd->accountName,
-          dd->accountKey,
+          dd->sas,
           dd->path,
           dd->host,
           dd->ip,
@@ -366,7 +366,7 @@ int dysk_def_from_buffer(char *buffer, size_t len, dysk_def *dd, char *error)
 
   idx += cut + strlen(n);
   // Account Key
-  cut = get_until(buffer + idx, n, dd->accountKey, ACCOUNT_KEY_LEN);
+  cut = get_until(buffer + idx, n, dd->sas, SAS_LEN);
 
   if (-1 == cut) {
     memcpy(error, ERR_ACCOUNT_KEY, strlen(ERR_ACCOUNT_KEY));

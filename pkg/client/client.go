@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -41,6 +42,7 @@ const (
 type DyskClient interface {
 	Mount(d *Dysk, autoLease, breakExistingLease bool) error
 	Unmount(name string, breakLease bool) error
+	BreakLease(d *Dysk) error
 	Get(name string) (*Dysk, error)
 	List() ([]*Dysk, error)
 	CreatePageBlob(sizeGB uint, container string, pageBlobName string, is_vhd bool, lease bool) (string, error)
@@ -56,23 +58,46 @@ type moduleResponse struct {
 type dyskclient struct {
 	storageAccountName string
 	storageAccountKey  string
+	usingSas           bool
 	blobClient         *storage.BlobStorageClient
 	f                  *os.File
 }
 
-func CreateClient(account string, key string) DyskClient {
+func createClient(account string, key string, isSas bool) DyskClient {
 	c := dyskclient{
 		storageAccountName: account,
 		storageAccountKey:  key,
+		usingSas:           isSas,
 	}
 	return &c
 }
 
+func CreateClientWithSas(account string, sas string) DyskClient {
+	return createClient(account, sas, true)
+}
+
+func CreateClient(account string, key string) DyskClient {
+	return createClient(account, key, false)
+}
+
 func (c *dyskclient) ensureBlobService() error {
+	var storageClient storage.Client
+	var err error
 	if nil == c.blobClient {
-		storageClient, err := storage.NewBasicClient(c.storageAccountName, c.storageAccountKey)
-		if err != nil {
-			return err
+		if !c.usingSas {
+			// Sas creation depends on the api version used by the client
+			// !options.ApiVersion
+			// TODO: support sovereign clouds
+			storageClient, err = storage.NewClient(c.storageAccountName, c.storageAccountKey, "core.windows.net", "2017-04-17", false)
+			if err != nil {
+				return err
+			}
+		} else {
+			url := fmt.Sprintf("http://%s.blob.core.windows.net", c.storageAccountName)
+			storageClient, err = storage.NewAccountSASClientFromEndpointToken(url, c.storageAccountKey)
+			if nil != err {
+				return fmt.Errorf("failed to create a client with sas:%v", err)
+			}
 		}
 		blobClient := storageClient.GetBlobService()
 		c.blobClient = &blobClient
@@ -123,8 +148,6 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 		return "", err
 	}
 
-	//fmt.Fprintf(os.Stderr, "Created PageBlob in account:%s %s/%s(%dGiB)\n", c.storageAccountName, container, pageBlobName, sizeGB)
-
 	// is it vhd?
 	h := vhd.CreateFixedHeader(uint64(sizeBytes), &vhd.VHDOptions{})
 	b := new(bytes.Buffer)
@@ -142,8 +165,6 @@ func (c *dyskclient) CreatePageBlob(sizeGB uint, container string, pageBlobName 
 	if err = pageBlob.WriteRange(blobRange, bytes.NewBuffer(headerBytes[:vhd.VHD_HEADER_SIZE]), nil); nil != err {
 		return "", err
 	}
-
-	//	fmt.Fprintf(os.Stderr, "Wrote VHD header for PageBlob in account:%s %s/%s\n", c.storageAccountName, container, pageBlobName)
 
 	if lease {
 		leaseId, err := page_blob_lease(pageBlob, false)
@@ -164,7 +185,11 @@ func (c *dyskclient) Mount(d *Dysk, autoLease, breakExistingLease bool) error {
 		return err
 	}
 
-	as_string := dysk2string(d)
+	as_string, err := c.dysk2string(d)
+	if nil != err {
+		return err
+	}
+
 	buffer := bufferize(as_string)
 
 	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, c.f.Fd(), IOCTLMOUNTDYSK, uintptr(unsafe.Pointer(&buffer[0])))
@@ -221,14 +246,11 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 	}
 
 	if breakleaseflag && len(d.LeaseId) > 0 {
-		_ = breakLease(d) // We ignore break leases error
-		/*
-					if err := breakLease(d); nil != err {
-			      fmt.Fprintf(os.Stderr, "Device:%s on %s/$s is unmounted but failed to break lease\n", d.Name, d.AccountName, d.AccountKey)
-					} else {
-						fmt.Fprintf(os.Stderr, "Broke lease while unmounting device:%s on %s:%s\n", d.Name, d.AccountName, d.Path)
-					}
-		*/
+		sasDyskClient := CreateClientWithSas(d.AccountName, d.Sas)
+		if err := sasDyskClient.BreakLease(d); nil != err {
+			fmt.Fprintf(os.Stderr, "Device:%s on %s %s is unmounted but failed to break lease with error: %v\n", d.Name, d.AccountName, d.Path, err)
+		}
+
 	}
 	return nil
 }
@@ -341,25 +363,29 @@ func (c *dyskclient) pageblob_get(d *Dysk) (*storage.Blob, error) {
 	containerPath = containerPath[1:]
 	blobContainer := blobClient.GetContainerReference(containerPath)
 
-	exists, err := blobContainer.Exists()
-	if nil != err {
-		return nil, err
+	// we can not really before the "exist" checks
+	// using sas -- since sas will limit access to the file only
+	if !c.usingSas {
+		exists, err := blobContainer.Exists()
+		if nil != err {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("Container at %s does not exist", d.Path)
+		}
 	}
-	if !exists {
-		return nil, fmt.Errorf("Container at %s does not exist", d.Path)
-	}
-
 	pageBlobName := path.Base(d.Path)
 	pageBlob := blobContainer.GetBlobReference(pageBlobName)
 
-	exists, err = pageBlob.Exists()
-	if nil != err {
-		return nil, err
+	if !c.usingSas {
+		exists, err := pageBlob.Exists()
+		if nil != err {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("Blob at %s does not exist", d.Path)
+		}
 	}
-	if !exists {
-		return nil, fmt.Errorf("Blob at %s does not exist", d.Path)
-	}
-
 	return pageBlob, nil
 }
 
@@ -389,7 +415,7 @@ func (c *dyskclient) set_pageblob_size(d *Dysk) error {
 //lease + validation
 func (c *dyskclient) pre_mount(d *Dysk, autoLease, breakExistingLease bool) error {
 	d.AccountName = c.storageAccountName
-	d.AccountKey = c.storageAccountKey
+	d.Sas = c.storageAccountKey
 
 	c.set_pageblob_size(d) /* TODO: Merge size functions in one place for validation and set_pageblob_size */
 
@@ -428,13 +454,8 @@ func (c *dyskclient) post_get(d *Dysk) {
 }
 
 /*Use dysks own storage account and key to break its lease */
-func breakLease(d *Dysk) error {
-	dyskClient := dyskclient{
-		storageAccountName: d.AccountName,
-		storageAccountKey:  d.AccountKey,
-	}
-
-	pageBlob, err := dyskClient.pageblob_get(d)
+func (c *dyskclient) BreakLease(d *Dysk) error {
+	pageBlob, err := c.pageblob_get(d)
 	if nil != err {
 		return err
 	}
@@ -524,11 +545,13 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 		return fmt.Errorf("Invalid Account name. Must be <= than 256")
 	}
 
-	if 0 == len(d.AccountKey) || ACCOUNT_KEY_LEN < len(d.AccountKey) {
-		return fmt.Errorf("Invalid AccountKey. Must be <= 64")
+	// we use account key in all steps
+	// we replace it with Sas at the end
+	if 0 == len(d.Sas) || ACCOUNT_KEY_LEN < len(d.Sas) {
+		return fmt.Errorf("Invalid Account Key. Must be <= 64")
 	}
 
-	_, err := base64.StdEncoding.DecodeString(d.AccountKey)
+	_, err := base64.StdEncoding.DecodeString(d.Sas)
 	if nil != err {
 		fmt.Errorf("Invalid account key. Must be a base64 encoded string. Error:%s", err.Error())
 	}
@@ -597,7 +620,7 @@ func string2dysk(asstring string) (*Dysk, error) {
 		Name:        split[1],
 		sectorCount: sectorCount,
 		AccountName: split[3],
-		AccountKey:  split[4],
+		Sas:         split[4],
 		Path:        split[5],
 		host:        split[6],
 		ip:          split[7],
@@ -611,16 +634,46 @@ func string2dysk(asstring string) (*Dysk, error) {
 	return &d, nil
 }
 
-// Dysk as string
-func dysk2string(d *Dysk) string {
+func (c *dyskclient) getDyskSas(d *Dysk) (string, error) {
+	pageBlob, err := c.pageblob_get(d)
+	if nil != err {
+		return "", err
+	}
+
+	//FifteenMin := time.Minute * time.Duration(-15) // allow clock skew https://docs.microsoft.com/en-us/azure/storage/common/storage-dotnet-shared-access-signature-part-1
+
+	options := storage.BlobSASOptions{}
+	options.APIVersion = "2017-04-17"
+	//options.Start = time.Now().Add(FifteenMin)
+	options.Expiry = time.Now().AddDate(5, 0, 0)
+	options.UseHTTPS = false
+	options.Read = true
+	options.Write = (d.Type == ReadWrite)
+
+	sas, err := pageBlob.GetSASURI(options)
+	if nil != err {
+		return "", err
+	}
+
+	queryString := strings.Split(sas, "?")
+	return queryString[1], nil
+}
+
+// dysk as string
+func (c *dyskclient) dysk2string(d *Dysk) (string, error) {
 	//type-devicename-sectorcount-accountname-accountkey-path-host-ip-lease-vhd
 	const format string = "%s\n%s\n%d\n%s\n%s\n%s\n%s\n%s\n%s\n%d\n"
 	is_vhd := 0
 	if d.Vhd {
 		is_vhd = 1
 	}
-	out := fmt.Sprintf(format, d.Type, d.Name, d.sectorCount, d.AccountName, d.AccountKey, d.Path, d.host, d.ip, d.LeaseId, is_vhd)
-	return out
+	// replace account key with sas key
+	sas, err := c.getDyskSas(d)
+	if nil != err {
+		return "", err
+	}
+	out := fmt.Sprintf(format, d.Type, d.Name, d.sectorCount, d.AccountName, sas, d.Path, d.host, d.ip, d.LeaseId, is_vhd)
+	return out, nil
 }
 
 // string as buffer with the correct padding
