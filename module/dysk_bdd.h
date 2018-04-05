@@ -14,7 +14,7 @@
 
 // Lengths
 #define ACCOUNT_NAME_LEN   256
-#define ACCOUNT_KEY_LEN    128
+#define SAS_LEN            128
 #define DEVICE_NAME_LEN    32
 #define BLOB_PATH_LEN      1024
 #define HOST_LEN           512
@@ -61,8 +61,8 @@ struct dysk_def {
   // storage account name
   char accountName[ACCOUNT_NAME_LEN];
 
-  // account Key
-  char accountKey[ACCOUNT_KEY_LEN];
+  // sas token
+  char sas[SAS_LEN];
 
   // page blob path including leading /
   char path[BLOB_PATH_LEN];

@@ -12,7 +12,7 @@ type Dysk struct {
 	Name        string
 	sectorCount uint64
 	AccountName string
-	AccountKey  string
+	Sas         string
 	Path        string
 	host        string
 	ip          string
