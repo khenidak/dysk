@@ -38,7 +38,7 @@ echo "creating mountpoint ${mount_point}"
 sudo mkdir -p "${mount_point}"
 
 echo "mounting device /dev/${device_name} to ${mount_point}"
-sudo mount /dev/${device_name} ${mount_point}
+sudo mount -o '_netdev,x-systemd.device-bound'  /dev/${device_name} ${mount_point}
 
 echo "create test file ${mount_point}/hello.txt"
 echo ${message} | sudo tee  ${mount_point}/hello.txt # mount point created at root owned directory
@@ -80,7 +80,7 @@ else
 fi
 
 echo "Mount /dev/${devicename} to ${mount_point} as readonly"
-sudo mount /dev/${device_name} /${mount_point} --read-only
+sudo mount -o '_netdev,x-systemd.device-bound,ro' /dev/${device_name} /${mount_point}
 
 echo "testing file previously created"
 
