@@ -34,7 +34,7 @@ echo "formatting /dev/${device_name}"
 sudo mkfs.ext4 /dev/${device_name}
 
 echo "mounting /dev/${device_name} to /mnt/dysk01"
-sudo mount /dev/${device_name} /mnt/dysk01
+sudo mount -o '_netdev,x-systemd.device-bound' /dev/${device_name} /mnt/dysk01
 echo "running fio"
 
 sudo fio "${FIO_FILE}"

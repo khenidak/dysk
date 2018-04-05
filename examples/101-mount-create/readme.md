@@ -25,8 +25,11 @@ sudo mkfs.ext4 /dev/${DEVICE_NAME}
 
 ```
 sudo mkdir /mnt/dysk
-sudo mount /dev/${DEVICE_NAME} /mnt/dysk
+sudo mount -o '_netdev' /dev/${DEVICE_NAME} /mnt/dysk
+
 ```
+
+> if systemd is your init system you will need `x-systemd.device-bound` [option](https://www.freedesktop.org/software/systemd/man/systemd.mount.html).
 
 6. Use the disk
 7. Unmounting the device
