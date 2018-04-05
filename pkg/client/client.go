@@ -58,31 +58,34 @@ type moduleResponse struct {
 type dyskclient struct {
 	storageAccountName string
 	storageAccountKey  string
+	storageAccountSas  string
 	usingSas           bool
 	blobClient         *storage.BlobStorageClient
 	f                  *os.File
 }
 
-func createClient(account string, key string, isSas bool) DyskClient {
+func createClient(account string, key string, sas string, isSas bool) DyskClient {
 	c := dyskclient{
 		storageAccountName: account,
 		storageAccountKey:  key,
+		storageAccountSas:  sas,
 		usingSas:           isSas,
 	}
 	return &c
 }
 
-func CreateClientWithSas(account string, sas string) DyskClient {
-	return createClient(account, sas, true)
+func CreateClientWithSas(account string, key string, sas string) DyskClient {
+	return createClient(account, key, sas, true)
 }
 
 func CreateClient(account string, key string) DyskClient {
-	return createClient(account, key, false)
+	return createClient(account, key, "", false)
 }
 
 func (c *dyskclient) ensureBlobService() error {
 	var storageClient storage.Client
 	var err error
+
 	if nil == c.blobClient {
 		if !c.usingSas {
 			// Sas creation depends on the api version used by the client
@@ -94,7 +97,11 @@ func (c *dyskclient) ensureBlobService() error {
 			}
 		} else {
 			url := fmt.Sprintf("http://%s.blob.core.windows.net", c.storageAccountName)
-			storageClient, err = storage.NewAccountSASClientFromEndpointToken(url, c.storageAccountKey)
+			if c.storageAccountSas == "" {
+				storageClient, err = storage.NewAccountSASClientFromEndpointToken(url, c.storageAccountKey)
+			} else {
+				storageClient, err = storage.NewAccountSASClientFromEndpointToken(url, c.storageAccountSas)
+			}
 			if nil != err {
 				return fmt.Errorf("failed to create a client with sas:%v", err)
 			}
@@ -246,7 +253,7 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 	}
 
 	if breakleaseflag && len(d.LeaseId) > 0 {
-		sasDyskClient := CreateClientWithSas(d.AccountName, d.Sas)
+		sasDyskClient := CreateClientWithSas(d.AccountName, d.Sas, c.storageAccountSas)
 		if err := sasDyskClient.BreakLease(d); nil != err {
 			fmt.Fprintf(os.Stderr, "Device:%s on %s %s is unmounted but failed to break lease with error: %v\n", d.Name, d.AccountName, d.Path, err)
 		}
@@ -545,15 +552,19 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 		return fmt.Errorf("Invalid Account name. Must be <= than 256")
 	}
 
-	// we use account key in all steps
-	// we replace it with Sas at the end
-	if 0 == len(d.Sas) || ACCOUNT_KEY_LEN < len(d.Sas) {
-		return fmt.Errorf("Invalid Account Key. Must be <= 64")
-	}
+	// Only validate account key if there's no SAS.
+	// Note that d.Sas here represents the account key.
+	if c.storageAccountSas == "" {
+		// we use account key in all steps
+		// we replace it with Sas at the end
+		if 0 == len(d.Sas) || ACCOUNT_KEY_LEN < len(d.Sas) {
+			return fmt.Errorf("Invalid Account Key. Must be <= 64")
+		}
 
-	_, err := base64.StdEncoding.DecodeString(d.Sas)
-	if nil != err {
-		fmt.Errorf("Invalid account key. Must be a base64 encoded string. Error:%s", err.Error())
+		_, err := base64.StdEncoding.DecodeString(d.Sas)
+		if nil != err {
+			fmt.Errorf("Invalid account key. Must be a base64 encoded string. Error:%s", err.Error())
+		}
 	}
 
 	if 0 == len(d.Path) || BLOB_PATH_LEN < len(d.Path) {
@@ -667,8 +678,18 @@ func (c *dyskclient) dysk2string(d *Dysk) (string, error) {
 	if d.Vhd {
 		is_vhd = 1
 	}
-	// replace account key with sas key
-	sas, err := c.getDyskSas(d)
+
+	// If the client doesn't have an explicit storage account SAS,
+	// use the account key to generate one.
+	var sas string
+	var err error
+
+	if c.storageAccountSas == "" {
+		sas, err = c.getDyskSas(d)
+	} else {
+		sas = c.storageAccountSas
+	}
+
 	if nil != err {
 		return "", err
 	}

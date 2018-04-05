@@ -15,6 +15,7 @@ import (
 var (
 	storageAccountName string
 	storageAccountKey  string
+	storageAccountSas  string
 
 	filePath string
 
@@ -194,7 +195,12 @@ dyskctl mount-file --file {path to file}`,
 				printError(err)
 				os.Exit(1)
 			}
-			dyskClient := client.CreateClientWithSas(d.AccountName, d.Sas)
+
+			// TODO: DESIGN: with the current unmarshalling, there's no way to tell whether or not
+			// the SAS we pass along is an account key or an actual SAS. Consider adding an additional
+			// property to client.Dysk.
+			// For now we assume a conversion is always required for a key.
+			dyskClient := client.CreateClientWithSas(d.AccountName, d.Sas, "")
 			err = dyskClient.Mount(&d, false, false)
 			if nil != err {
 				printError(err)
@@ -265,6 +271,7 @@ func init() {
 	// MOUNT //
 	mountCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
 	mountCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	mountCmd.PersistentFlags().StringVarP(&storageAccountSas, "sas", "s", "", "Azure storage SAS. If specified, Azure account key is not required. Optional.")
 	mountCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name")
 	mountCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
 	mountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
