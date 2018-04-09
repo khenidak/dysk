@@ -38,7 +38,7 @@ kubectl get po --namespace=flex
 # Basic Usage
 ## 1. create a secret which stores dysk account name and password
 ```
-kubectl create secret generic dyskcreds --from-literal username=USERNAME --from-literal password="PASSWORD" --type="azure/dysk"
+kubectl create secret generic dyskcreds --from-literal accountname=ACCOUNT-NAME --from-literal accountkey="ACCOUNT-KEY" --type="azure/dysk"
 ```
 
 ## 2. create a pod with dysk flexvolume mount on linux
