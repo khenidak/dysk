@@ -43,7 +43,7 @@ csi-provisioner-0   1/1       Running   0          2m
 # Basic Usage
 ## 1. create a secret which stores dysk account name and password
 ```
-kubectl create secret generic dyskcreds --from-literal username=USERNAME --from-literal password="PASSWORD" --type="azure/dysk"
+kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="azure/dysk"
 ```
 
 ## 2. create a pod with csi dysk driver mount on linux
