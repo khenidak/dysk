@@ -25,7 +25,7 @@ watch kubectl get po --namespace=flex
 ```
 kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi/deployment/csi-provisioner.yaml
 kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi/deployment/csi-attacher.yaml
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi//deployment/csi-dysk-driver.yaml
+kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi/deployment/csi-dysk-driver.yaml
 ```
 
  - check pods status:
