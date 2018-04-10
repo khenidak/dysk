@@ -41,7 +41,7 @@ csi-provisioner-0   1/1       Running   0          2m
 ```
 
 # Basic Usage
-## 1. create a secret which stores dysk account name and password
+## 1. create a secret with dysk account name and key
 ```
 kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="azure/dysk"
 ```
