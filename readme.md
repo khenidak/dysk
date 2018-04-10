@@ -42,6 +42,14 @@ Type                            Name                            VHD             
 RW                              dysk1cmwC5uU                    Yes                             2                               dyskdemo                        /dysks/dysk1cmwC5uU.vhd
 ```
 
+Mount an existing Azure Page Blob (with a SAS):
+```
+sudo dyskctl mount -a {STORAGE ACCOUNT NAME} -s {SAS URL} -p dyskHrcjoIj4.vhd -l -b
+
+## SAS URLs are currently using this format:
+## "se=2020-04-05T20%3A13%3A24Z&sig=foo%3D&sp=rw&sr=b&sv=2017-04-01"
+```
+
 If you are seeing error `storage: service returned error: StatusCode=409, ErrorCode=LeaseAlreadyPresent, ErrorMessage=There is already a lease present.`, you can set the `--break-lease` flag to `true` to break the existing lease.
 ```
 sudo dyskctl mount -a {STORAGE ACCOUNT NAME} -k {STORAGE ACCOUNT KEY} -c {CONTAINER NAME} -d {DISK NAME} -i {LEASE ID} -b true
