@@ -23,8 +23,6 @@ watch kubectl get po --namespace=flex
 
  - install dysk CSI components
 ```
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi/deployment/csi-provisioner.yaml
-kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi/deployment/csi-attacher.yaml
 kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/csi/deployment/csi-dysk-driver.yaml
 ```
 

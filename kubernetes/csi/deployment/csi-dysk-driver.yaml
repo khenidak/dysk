@@ -1,6 +1,178 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  name: csi-dysk-provisioner
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: external-provisioner-runner
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-dysk-provisioner-role
+subjects:
+  - kind: ServiceAccount
+    name: csi-dysk-provisioner
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: external-provisioner-runner
+  apiGroup: rbac.authorization.k8s.io
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: csi-dysk-provisioner
+  labels:
+    app: csi-dysk-provisioner
+spec:
+  selector:
+    app: csi-dysk-provisioner
+  ports:
+    - name: dummy
+      port: 12345
+
+---
+kind: StatefulSet
+apiVersion: apps/v1beta1
+metadata:
+  name: csi-dysk-provisioner
+spec:
+  serviceName: "csi-dysk-provisioner"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: csi-dysk-provisioner
+    spec:
+      serviceAccount: csi-dysk-provisioner
+      containers:
+        - name: csi-dysk-provisioner
+          image: andyzhangx/csi-provisioner:0.2.0
+          args:
+            - "--provisioner=csi-dysk"
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/plugins/csi-dysk/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/kubelet/plugins/csi-dysk
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/csi-dysk
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-dysk-attacher
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: external-attacher-runner
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-dysk-attacher-role
+subjects:
+  - kind: ServiceAccount
+    name: csi-dysk-attacher
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: external-attacher-runner
+  apiGroup: rbac.authorization.k8s.io
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: csi-dysk-attacher
+  labels:
+    app: csi-dysk-attacher
+spec:
+  selector:
+    app: csi-dysk-attacher
+  ports:
+    - name: dummy
+      port: 12345
+
+---
+kind: StatefulSet
+apiVersion: apps/v1beta1
+metadata:
+  name: csi-dysk-attacher
+spec:
+  serviceName: "csi-dysk-attacher"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: csi-dysk-attacher
+    spec:
+      serviceAccount: csi-dysk-attacher
+      containers:
+        - name: csi-dysk-attacher
+          image: quay.io/k8scsi/csi-attacher:v0.2.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/kubelet/plugins/csi-dysk/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/kubelet/plugins/csi-dysk
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/csi-dysk
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: csi-dysk
 
 ---
@@ -95,16 +267,15 @@ spec:
             - name: mountpoint-dir
               mountPath: /var/lib/kubelet/pods
               mountPropagation: "Bidirectional"
-            - mountPath: /dev
-              name: host-dev
+            - name: host-dev
+              mountPath: /dev
       volumes:
         - name: mountpoint-dir
           hostPath:
             path: /var/lib/kubelet/pods
-            type: Directory
         - name: socket-dir
           hostPath:
-            path: /var/lib/kubelet/plugins
+            path: /var/lib/kubelet/plugins/csi-dysk
         - name: host-dev
           hostPath:
             path: /dev
