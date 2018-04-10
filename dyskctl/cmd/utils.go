@@ -10,16 +10,26 @@ import (
 	"github.com/khenidak/dysk/pkg/client"
 )
 
+const (
+	defaultDyskSize = 2
+)
+
 func mount_create() {
 	var err error
-	dyskClient := client.CreateClient(storageAccountName, storageAccountKey)
+	var dyskClient client.DyskClient
+
+	if storageAccountSas == "" {
+		dyskClient = client.CreateClient(storageAccountName, storageAccountKey)
+	} else {
+		dyskClient = client.CreateClientWithSas(storageAccountName, storageAccountKey, storageAccountSas)
+	}
 
 	if "" == deviceName {
 		deviceName = getRandomDyskName()
 	}
 
 	if 0 == size {
-		size = 2
+		size = defaultDyskSize
 	}
 
 	if autoCreate {
