@@ -2,12 +2,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: csi-dysk-provisioner
+  namespace: dysk
 
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: external-provisioner-runner
+  name: dysk:external-provisioner-runner
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -33,10 +34,10 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: csi-dysk-provisioner
-    namespace: default
+    namespace: dysk
 roleRef:
   kind: ClusterRole
-  name: external-provisioner-runner
+  name: dysk:external-provisioner-runner
   apiGroup: rbac.authorization.k8s.io
 
 ---
@@ -44,6 +45,7 @@ kind: Service
 apiVersion: v1
 metadata:
   name: csi-dysk-provisioner
+  namespace: dysk
   labels:
     app: csi-dysk-provisioner
 spec:
@@ -58,6 +60,7 @@ kind: StatefulSet
 apiVersion: apps/v1beta1
 metadata:
   name: csi-dysk-provisioner
+  namespace: dysk
 spec:
   serviceName: "csi-dysk-provisioner"
   replicas: 1
@@ -90,12 +93,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: csi-dysk-attacher
+  namespace: dysk
 
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: external-attacher-runner
+  name: dysk:external-attacher-runner
 rules:
   - apiGroups: [""]
     resources: ["events"]
@@ -118,10 +122,10 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: csi-dysk-attacher
-    namespace: default
+    namespace: dysk
 roleRef:
   kind: ClusterRole
-  name: external-attacher-runner
+  name: dysk:external-attacher-runner
   apiGroup: rbac.authorization.k8s.io
 ---
 
@@ -129,6 +133,7 @@ kind: Service
 apiVersion: v1
 metadata:
   name: csi-dysk-attacher
+  namespace: dysk
   labels:
     app: csi-dysk-attacher
 spec:
@@ -143,6 +148,7 @@ kind: StatefulSet
 apiVersion: apps/v1beta1
 metadata:
   name: csi-dysk-attacher
+  namespace: dysk
 spec:
   serviceName: "csi-dysk-attacher"
   replicas: 1
@@ -174,6 +180,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: csi-dysk
+  namespace: dysk
 
 ---
 kind: ClusterRole
@@ -201,7 +208,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: csi-dysk
-    namespace: default
+    namespace: dysk
 roleRef:
   kind: ClusterRole
   name: csi-dysk
@@ -215,6 +222,7 @@ kind: DaemonSet
 apiVersion: apps/v1beta2
 metadata:
   name: csi-dysk
+  namespace: dysk
 spec:
   selector:
     matchLabels:

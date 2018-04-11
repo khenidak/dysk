@@ -17,8 +17,8 @@ kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kuberne
 
  - check daemonset status:
 ```
-watch kubectl describe daemonset dysk-flexvol-installer --namespace=flex
-watch kubectl get po --namespace=flex
+watch kubectl describe daemonset dysk-flexvol-installer --namespace=dysk
+watch kubectl get po --namespace=dysk -o wide
 ```
 
  - install dysk CSI components
@@ -28,20 +28,24 @@ kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kuberne
 
  - check pods status:
 ```
-watch kubectl get po
+watch kubectl get po --namespace=dysk -o wide
 ```
 example output:
 ```
-NAME                READY     STATUS    RESTARTS   AGE
-csi-attacher-0      1/1       Running   1          1m
-csi-dysk-m8lqp      2/2       Running   0          1m
-csi-provisioner-0   1/1       Running   0          2m
+NAME                           READY     STATUS    RESTARTS   AGE       IP            NODE
+csi-dysk-7w8vm                 2/2       Running   0          3m        10.240.0.4    k8s-agentpool-66825246-0
+csi-dysk-attacher-0            1/1       Running   0          3m        10.240.0.42   k8s-agentpool-66825246-1
+csi-dysk-lzsz2                 2/2       Running   0          3m        10.240.0.35   k8s-agentpool-66825246-1
+csi-dysk-provisioner-0         1/1       Running   0          3m        10.240.0.37   k8s-agentpool-66825246-1
+dysk-flexvol-installer-64hpv   2/2       Running   0          3m        10.240.0.8    k8s-agentpool-66825246-0
+dysk-flexvol-installer-m4w6j   2/2       Running   0          3m        10.240.0.90   k8s-master-66825246-0
+dysk-flexvol-installer-qnjhj   2/2       Running   0          3m        10.240.0.52   k8s-agentpool-66825246-1
 ```
 
 # Basic Usage
 ## 1. create a secret with dysk account name and key
 ```
-kubectl create secret generic dyskcreds --from-literal accountname=USERNAME --from-literal accountkey="PASSWORD" --type="azure/dysk"
+kubectl create secret generic dyskcreds --from-literal accountname=ACCOUNT-NAME --from-literal accountkey="ACCOUNT-KEY" --type="azure/dysk"
 ```
 
 ## 2. create a pod with csi dysk driver mount on linux

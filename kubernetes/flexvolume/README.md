@@ -29,10 +29,9 @@ kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kuberne
 
  - check daemonset status:
 ```
-kubectl describe daemonset dysk-flexvol-installer --namespace=flex
-kubectl get po --namespace=flex
+watch kubectl describe daemonset dysk-flexvol-installer --namespace=dysk
+watch kubectl get po --namespace=dysk
 ```
-
 > Note: for deployment on v1.7, it requires restarting kubelet on every node(`sudo systemctl restart kubelet`) after daemonset running complete due to [Dynamic Plugin Discovery](https://github.com/kubernetes/community/blob/master/contributors/devel/flexvolume.md#dynamic-plugin-discovery) not supported on k8s v1.7
 
 # Basic Usage
@@ -70,15 +69,15 @@ kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kuberne
 ```
 
  - check status of PV & PVC until its Status changed to `Bound`
- ```
+```
 kubectl get pv
 kubectl get pvc
- ```
+```
  
  - create a pod with dysk flexvolume PVC
 ```
 kubectl create -f https://raw.githubusercontent.com/khenidak/dysk/master/kubernetes/flexvolume/nginx-flex-dysk-readonly.yaml
- ```
+```
 
 ## 3. enter the pod container to do validation
  - watch the status of pod until its Status changed from `Pending` to `Running`

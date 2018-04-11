@@ -9,11 +9,11 @@ spec:
     - ReadOnlyMany #ReadWriteOnce is also supported
   persistentVolumeReclaimPolicy: Retain
   flexVolume:
-      driver: "azure/dysk"
-      readOnly: true
-      fsType: ext4
-      secretRef:
-        name: dyskcreds
-      options:
-        container: CONTAINER-NAME
-        blob: NAME.vhd
+    driver: "azure/dysk"
+    readOnly: true
+    fsType: ext4
+    secretRef:
+      name: dyskcreds
+    options:
+      container: CONTAINER-NAME
+      blob: NAME.vhd
