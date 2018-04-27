@@ -120,3 +120,5 @@ sudo dyskctl unmount -d dysk6Hjr5R52
 
 > for further CLI commands execute ```dyskctl --help ```
 
+# License
+The kernel module is licensed as GPLv2 and the rest of the repo is licensed as MIT
