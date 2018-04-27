@@ -1058,7 +1058,7 @@ static void __exit _module_teardown(void)
 // ---------------------------------------
 // LKM Things
 // ---------------------------------------
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Khaled Henidak (Kal) - khnidk@outlook.com");
 MODULE_DESCRIPTION("Mount cloud storage as block devices");
 MODULE_VERSION("0.0.1");
