@@ -21,7 +21,7 @@ static const unsigned char base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg
 
 
 // Date in UTC formatted as RFC1123
-inline int utc_RFC1123_date(char *buf, size_t len)
+int utc_RFC1123_date(char *buf, size_t len)
 {
   struct timeval now;
   struct tm tm_val;
@@ -63,7 +63,7 @@ Hashing
                         crypto_shash_descsize(ctx)] CRYPTO_MINALIGN_ATTR; \
   struct shash_desc *shash = (struct shash_desc *)__##shash##_desc
 
-inline int calc_hash(struct crypto_shash *tfm, unsigned char *digest, const unsigned char *buf, unsigned int buflen)
+int calc_hash(struct crypto_shash *tfm, unsigned char *digest, const unsigned char *buf, unsigned int buflen)
 {
   SHASH_DESC_ON_STACK(desc, tfm);
   int err;
@@ -75,7 +75,7 @@ inline int calc_hash(struct crypto_shash *tfm, unsigned char *digest, const unsi
   return err;
 }
 
-inline int calc_hmac(struct crypto_shash *tfm, unsigned char *digest, const unsigned char *key, unsigned int keylen, const unsigned char *buf, unsigned int buflen)
+int calc_hmac(struct crypto_shash *tfm, unsigned char *digest, const unsigned char *key, unsigned int keylen, const unsigned char *buf, unsigned int buflen)
 {
   int err;
   err = crypto_shash_setkey(tfm, key, keylen);
@@ -138,7 +138,7 @@ unsigned char *base64_encode(const unsigned char *src, size_t len, size_t *out_l
   return out;
 }
 
-inline unsigned char *base64_decode(const unsigned char *src, size_t len, size_t *out_len)
+unsigned char *base64_decode(const unsigned char *src, size_t len, size_t *out_len)
 {
   unsigned char dtable[256], *out, *pos, block[4], tmp;
   size_t i, count, olen;
@@ -206,7 +206,7 @@ inline unsigned char *base64_decode(const unsigned char *src, size_t len, size_t
   return out;
 }
 // Finds something, copies everything before it to [to]
-inline int get_until(char *haystack, const char *until, char *to, size_t max)
+int get_until(char *haystack, const char *until, char *to, size_t max)
 {
   char *offset;
   int length;
