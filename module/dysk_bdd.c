@@ -129,7 +129,7 @@ int io_hook(dysk *d);
 int io_unhook(dysk *d);
 
 // finds and mark slot as busy
-static inline int find_set_dysk_slots(void)
+static int find_set_dysk_slots(void)
 {
   int ret = -1;
   unsigned int pos;
@@ -148,7 +148,7 @@ done:
 }
 
 // frees dysk slot
-static inline void free_dysk_slot(unsigned int pos)
+static void free_dysk_slot(unsigned int pos)
 {
   spin_lock(&dysks.lock);
   test_and_clear_bit(pos, (unsigned long *) &dysks.dysks_slots);
@@ -158,7 +158,7 @@ static inline void free_dysk_slot(unsigned int pos)
 }
 
 // Finds a dysk in a list
-static inline dysk *dysk_exist(char *name)
+static dysk *dysk_exist(char *name)
 {
   dysk *existing;
   int found = 0;
@@ -201,7 +201,7 @@ task_result __del_dysk_async(w_task *this_task)
 }
 
 // Sync part
-static inline int dysk_del(char *name, char *error)
+static int dysk_del(char *name, char *error)
 {
   const char *ERR_DYSK_DOES_NOT_EXIST = "Failed to unmount dysk, device with name:%s does not exists";
   const char *ERR_DYSK_DEL_NO_MEM = "No memory to delete dysk:%s";
@@ -245,7 +245,7 @@ static inline int dysk_del(char *name, char *error)
   return 0;
 }
 // Adds a dysk
-static inline int dysk_add(dysk *d, char *error)
+static int dysk_add(dysk *d, char *error)
 {
   const char *ERR_DYSK_EXISTS = "Failed to mount dysk, device with name:%s already exists";
   const char *ERR_DYSK_ADD    = "Failed to mount device:%s with errno:%d";

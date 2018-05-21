@@ -129,7 +129,7 @@ typedef void(*w_task_state_clean_fn)(w_task *this_task, task_clean_reason clean_
 //enqueues a new task in worker queue
 int queue_w_task(w_task *parent_task, dysk *d, w_task_exec_fn exec_fn, w_task_state_clean_fn state_clean_fn, task_mode mode, void *state);
 // TODO: Do we need this?
-void inline dysk_worker_work_available(dysk_worker *dw);
+void dysk_worker_work_available(dysk_worker *dw);
 // Start worker
 int dysk_worker_init(dysk_worker *dw);
 // Stop worker

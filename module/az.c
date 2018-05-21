@@ -209,7 +209,7 @@ struct http_response {
 //  Connection Pool Mgmt
 //  -------------------------
 // closes a connection
-static inline void connection_teardown(connection *c)
+static void connection_teardown(connection *c)
 {
   if (c) {
     if (c->sockt) {
@@ -222,7 +222,7 @@ static inline void connection_teardown(connection *c)
   }
 }
 // Creates a connection
-static inline int connection_create(connection_pool *pool, connection **c)
+static int connection_create(connection_pool *pool, connection **c)
 {
   struct socket *sockt   = NULL;
   connection *newcon     = NULL;
@@ -263,7 +263,7 @@ failed:
 }
 
 // How many connections are in pool
-static inline unsigned int connection_pool_count(connection_pool *pool)
+static unsigned int connection_pool_count(connection_pool *pool)
 {
   unsigned int sizebytes = kfifo_len(&pool->connection_queue);
   unsigned int actual = sizebytes / sizeof(connection *);
@@ -315,7 +315,7 @@ failed:
 }
 
 // Creates a pool
-static inline int connection_pool_init(connection_pool *pool)
+static int connection_pool_init(connection_pool *pool)
 {
   char *ip = pool->azstate->d->def->ip;
   int port = 80;
@@ -344,7 +344,7 @@ fail:
 }
 
 // Destroy a pool
-static inline void connection_pool_teardown(connection_pool *pool)
+static void connection_pool_teardown(connection_pool *pool)
 {
   connection *c = NULL;
 
@@ -372,7 +372,7 @@ static inline void connection_pool_teardown(connection_pool *pool)
 // ---------------------------
 // Worker Utility Functions
 // ---------------------------
-static inline int http_response_completed(http_response *res, char *buffer)
+static int http_response_completed(http_response *res, char *buffer)
 {
   /* for any status other than 201 we will get Content-Length */
   const char *chunked_body_mark = "0\r\n\r\n";
@@ -390,7 +390,7 @@ static inline int http_response_completed(http_response *res, char *buffer)
   return 0;
 }
 // Convert response to something meaninful
-static inline int process_response(char *response, size_t response_length, http_response *res, size_t bytes_received)
+static int process_response(char *response, size_t response_length, http_response *res, size_t bytes_received)
 {
   const char *content_length = "Content-Length";
   int cut          = 0;

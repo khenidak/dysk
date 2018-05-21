@@ -69,7 +69,7 @@ int queue_w_task(w_task *parent_task, dysk *d, w_task_exec_fn exec_fn, w_task_st
 // -----------------------------
 
 // Executes a single task
-static inline void execute(dysk_worker *dw, w_task *w)
+static void execute(dysk_worker *dw, w_task *w)
 {
   // Tasks returning retry_now will be executed to max then retried later.
 #define max_retry_now_count 3 // Max # of retrying a task that said retry now
