@@ -8,17 +8,18 @@ const (
 )
 
 type Dysk struct {
-	Type        DyskType
-	Name        string
-	sectorCount uint64
-	AccountName string
-	Sas         string
-	Path        string
-	host        string
-	ip          string
-	LeaseId     string
-	Major       int
-	Minor       int
-	Vhd         bool
-	SizeGB      int
+	Type         DyskType
+	Name         string
+	sectorCount  uint64
+	AccountName  string
+	Sas          string
+	Path         string
+	host         string
+	ip           string
+	LeaseId      string
+	Major        int
+	Minor        int
+	Vhd          bool
+	SizeGB       int
+	AccountRealm string
 }

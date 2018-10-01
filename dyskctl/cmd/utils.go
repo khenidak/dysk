@@ -19,9 +19,9 @@ func mount_create() {
 	var dyskClient client.DyskClient
 
 	if storageAccountSas == "" {
-		dyskClient = client.CreateClient(storageAccountName, storageAccountKey)
+		dyskClient = client.CreateClient(storageAccountName, storageAccountKey, storageAccountRealm)
 	} else {
-		dyskClient = client.CreateClientWithSas(storageAccountName, storageAccountKey, storageAccountSas)
+		dyskClient = client.CreateClientWithSas(storageAccountName, storageAccountKey, storageAccountSas, storageAccountRealm)
 	}
 
 	if "" == deviceName {
@@ -65,6 +65,7 @@ func mount_create() {
 	d.Path = "/" + container + "/" + pageBlobName
 	d.LeaseId = leaseId
 	d.Vhd = vhdFlag
+	d.AccountRealm = storageAccountRealm
 
 	if mount {
 		err = dyskClient.Mount(&d, autoLeaseFlag, breakLeaseFlag)

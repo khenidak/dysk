@@ -56,30 +56,32 @@ type moduleResponse struct {
 }
 
 type dyskclient struct {
-	storageAccountName string
-	storageAccountKey  string
-	storageAccountSas  string
-	usingSas           bool
-	blobClient         *storage.BlobStorageClient
-	f                  *os.File
+	storageAccountName  string
+	storageAccountKey   string
+	storageAccountSas   string
+	storageAccountRealm string
+	usingSas            bool
+	blobClient          *storage.BlobStorageClient
+	f                   *os.File
 }
 
-func createClient(account string, key string, sas string, isSas bool) DyskClient {
+func createClient(account string, key string, sas string, isSas bool, storageAccountRealm string) DyskClient {
 	c := dyskclient{
-		storageAccountName: account,
-		storageAccountKey:  key,
-		storageAccountSas:  sas,
-		usingSas:           isSas,
+		storageAccountName:  account,
+		storageAccountKey:   key,
+		storageAccountSas:   sas,
+		usingSas:            isSas,
+		storageAccountRealm: storageAccountRealm,
 	}
 	return &c
 }
 
-func CreateClientWithSas(account string, key string, sas string) DyskClient {
-	return createClient(account, key, sas, true)
+func CreateClientWithSas(account string, key string, sas string, storageAccountRealm string) DyskClient {
+	return createClient(account, key, sas, true, storageAccountRealm)
 }
 
-func CreateClient(account string, key string) DyskClient {
-	return createClient(account, key, "", false)
+func CreateClient(account string, key string, storageAccountRealm string) DyskClient {
+	return createClient(account, key, "", false, storageAccountRealm)
 }
 
 func (c *dyskclient) ensureBlobService() error {
@@ -90,13 +92,12 @@ func (c *dyskclient) ensureBlobService() error {
 		if !c.usingSas {
 			// Sas creation depends on the api version used by the client
 			// !options.ApiVersion
-			// TODO: support sovereign clouds
-			storageClient, err = storage.NewClient(c.storageAccountName, c.storageAccountKey, "core.windows.net", "2017-04-17", false)
+			storageClient, err = storage.NewClient(c.storageAccountName, c.storageAccountKey, c.storageAccountRealm, "2017-04-17", false)
 			if err != nil {
 				return err
 			}
 		} else {
-			url := fmt.Sprintf("http://%s.blob.core.windows.net", c.storageAccountName)
+			url := fmt.Sprintf("http://%s.blob.%s", c.storageAccountName, c.storageAccountRealm)
 			if c.storageAccountSas == "" {
 				storageClient, err = storage.NewAccountSASClientFromEndpointToken(url, c.storageAccountKey)
 			} else {
@@ -253,7 +254,7 @@ func (c *dyskclient) Unmount(name string, breakleaseflag bool) error {
 	}
 
 	if breakleaseflag && len(d.LeaseId) > 0 {
-		sasDyskClient := CreateClientWithSas(d.AccountName, d.Sas, c.storageAccountSas)
+		sasDyskClient := CreateClientWithSas(d.AccountName, d.Sas, c.storageAccountSas, c.storageAccountRealm)
 		if err := sasDyskClient.BreakLease(d); nil != err {
 			fmt.Fprintf(os.Stderr, "Device:%s on %s %s is unmounted but failed to break lease with error: %v\n", d.Name, d.AccountName, d.Path, err)
 		}
@@ -579,7 +580,7 @@ func (c *dyskclient) validateDysk(d *Dysk) error {
 	if 0 < len(d.host) && HOST_LEN < len(d.host) {
 		return fmt.Errorf("Invalid host. Must be <= 512")
 	} else {
-		d.host = fmt.Sprintf("%s.blob.core.windows.net", d.AccountName) // Won't support sovereign clouds for now
+		d.host = fmt.Sprintf("%s.blob.%s", d.AccountName, d.AccountRealm)
 	}
 
 	if ReadOnly != d.Type && (0 == len(d.LeaseId) || LEASE_ID_LEN < len(d.LeaseId)) {
