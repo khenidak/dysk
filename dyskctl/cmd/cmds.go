@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	storageAccountName string
-	storageAccountKey  string
-	storageAccountSas  string
+	storageAccountName  string
+	storageAccountKey   string
+	storageAccountSas   string
+	storageAccountRealm string
 
 	filePath string
 
@@ -83,7 +84,7 @@ dyskctl delete --account {acount-name} --key {key} --pageblob-name {pageblobname
 dyskctl delete --account {acount-name} --key {key} --pageblob-name {pageblobname} --container {container-name} --lease-id
 `,
 		Run: func(cmd *cobra.Command, args []string) {
-			dyskClient := client.CreateClient(storageAccountName, storageAccountKey)
+			dyskClient := client.CreateClient(storageAccountName, storageAccountKey, storageAccountRealm)
 			if err := dyskClient.DeletePageBlob(container, pageBlobName, leaseId, breakLeaseFlag); nil != err {
 				printError(err)
 				os.Exit(1)
@@ -200,7 +201,7 @@ dyskctl mount-file --file {path to file}`,
 			// the SAS we pass along is an account key or an actual SAS. Consider adding an additional
 			// property to client.Dysk.
 			// For now we assume a conversion is always required for a key.
-			dyskClient := client.CreateClientWithSas(d.AccountName, d.Sas, "")
+			dyskClient := client.CreateClientWithSas(d.AccountName, d.Sas, "", d.AccountRealm)
 			err = dyskClient.Mount(&d, false, false)
 			if nil != err {
 				printError(err)
@@ -218,7 +219,7 @@ example:
 dyskctl unmount --deviceName dysk01`,
 		Run: func(cmd *cobra.Command, args []string) {
 			validateOutput()
-			dyskClient := client.CreateClient("", "")
+			dyskClient := client.CreateClient("", "", "")
 			err := dyskClient.Unmount(deviceName, breakLeaseFlag)
 			if nil != err {
 				printError(err)
@@ -236,7 +237,7 @@ example:
 dyskctl get --deviceName dysk01`,
 		Run: func(cmd *cobra.Command, args []string) {
 			validateOutput()
-			dyskClient := client.CreateClient("", "")
+			dyskClient := client.CreateClient("", "", "")
 			d, err := dyskClient.Get(deviceName)
 
 			if nil != err {
@@ -255,7 +256,7 @@ example:
 dyskctl list`,
 		Run: func(cmd *cobra.Command, args []string) {
 			validateOutput()
-			dyskClient := client.CreateClient("", "")
+			dyskClient := client.CreateClient("", "", "")
 			dysks, err := dyskClient.List()
 
 			if nil != err {
@@ -272,6 +273,7 @@ func init() {
 	mountCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
 	mountCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
 	mountCmd.PersistentFlags().StringVarP(&storageAccountSas, "sas", "s", "", "Azure storage SAS. If specified, Azure account key is not required. Optional.")
+	mountCmd.PersistentFlags().StringVar(&storageAccountRealm, "realm", "core.windows.net", "Azure storage realm. Optional.")
 	mountCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name")
 	mountCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name)")
 	mountCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. if empty a random name will be used")
@@ -284,6 +286,7 @@ func init() {
 	// CREATE //
 	createCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
 	createCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	createCmd.PersistentFlags().StringVar(&storageAccountRealm, "realm", "core.windows.net", "Azure storage realm. Optional")
 	createCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name. (if empty a random name will be used)")
 	createCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name")
 	createCmd.PersistentFlags().StringVarP(&deviceName, "device-name", "d", "", "block device name. (if empty a random name will be used)")
@@ -295,6 +298,7 @@ func init() {
 	// DELETE //
 	deleteCmd.PersistentFlags().StringVarP(&storageAccountName, "account", "a", "", "Azure storage account name")
 	deleteCmd.PersistentFlags().StringVarP(&storageAccountKey, "key", "k", "", "Azure storage account key")
+	deleteCmd.PersistentFlags().StringVar(&storageAccountRealm, "realm", "core.windows.net", "Azure storage realm. Optional")
 	deleteCmd.PersistentFlags().StringVarP(&pageBlobName, "pageblob-name", "p", "", "Azure storage page blob name")
 	deleteCmd.PersistentFlags().StringVarP(&container, "container-name", "c", "dysks", "Azure storage blob container name")
 	deleteCmd.PersistentFlags().StringVarP(&leaseId, "lease-id", "i", "", "dysk is already leased, use this lease while deleting")
