@@ -23,15 +23,15 @@ static const unsigned char base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg
 // Date in UTC formatted as RFC1123
 int utc_RFC1123_date(char *buf, size_t len)
 {
-  struct timeval now;
+  struct timespec64 now;
   struct tm tm_val;
   char day[8]  = {0};
   char hour[8] = {0};
   char min[8]  = {0};
   char sec[8]  = {0};
   memset(buf, 0, len);
-  do_gettimeofday(&now);
-  time_to_tm(now.tv_sec, 0, &tm_val);
+  ktime_get_real_ts64(&now);
+  time64_to_tm(now.tv_sec, 0, &tm_val);
   sprintf(day, tm_val.tm_mday < 10 ? "0%d" : "%d", tm_val.tm_mday);
   sprintf(hour, tm_val.tm_hour < 10 ? "0%d" : "%d", tm_val.tm_hour);
   sprintf(min, tm_val.tm_min < 10 ? "0%d" : "%d", tm_val.tm_min);
