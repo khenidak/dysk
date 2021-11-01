@@ -17,7 +17,7 @@ func isValidDeviceName(deviceName string) error {
 	numbers_alpha := regexp.MustCompile(`^[A-Za-z0-9.]+$`).MatchString
 
 	if !numbers_alpha(deviceName) {
-		return fmt.Errorf("Device name:%s is invalid only alpha + numnbers")
+		return fmt.Errorf("Device name:%s is invalid only alpha + numnbers", deviceName)
 	}
 	return nil
 }
